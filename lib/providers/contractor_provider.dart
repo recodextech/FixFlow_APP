@@ -5,31 +5,11 @@ import '../services/api_service.dart';
 class ContractorProvider extends ChangeNotifier {
   final ApiService _apiService = ApiService();
   
-  List<Contractor> _contractors = [];
   bool _isLoading = false;
   String? _error;
 
-  List<Contractor> get contractors => _contractors;
   bool get isLoading => _isLoading;
   String? get error => _error;
-
-  /// Fetch all contractors
-  Future<void> fetchContractors() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      _contractors = await _apiService.getContractors();
-      _error = null;
-    } catch (e) {
-      _error = e.toString();
-      _contractors = [];
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
 
   /// Create a new contractor
   Future<Map<String, dynamic>> createContractor({
@@ -50,7 +30,6 @@ class ContractorProvider extends ChangeNotifier {
         phoneNumber: phoneNumber,
       );
       _error = null;
-      await fetchContractors(); // Refresh the list
       return result;
     } catch (e) {
       _error = e.toString();
@@ -62,9 +41,12 @@ class ContractorProvider extends ChangeNotifier {
   }
 
   /// Get a single contractor
-  Future<Contractor?> getContractor(String contractorId) async {
+  Future<Contractor?> getContractor(String contractorId, {String? accountId}) async {
     try {
-      return await _apiService.getContractor(contractorId);
+      return await _apiService.getContractor(
+        contractorId,
+        accountId: accountId,
+      );
     } catch (e) {
       _error = e.toString();
       notifyListeners();

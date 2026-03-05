@@ -30,6 +30,8 @@ class Worker {
   final List<String> workerCategories;
   final String? accountId;
 
+  List<String> get categories => workerCategories;
+
   Worker({
     required this.id,
     required this.workerName,
@@ -40,12 +42,15 @@ class Worker {
   });
 
   factory Worker.fromJson(Map<String, dynamic> json) {
+    final categoryList =
+        (json['workerCategories'] ?? json['categories'] ?? []) as List<dynamic>;
+
     return Worker(
       id: json['id'] ?? '',
       workerName: json['workerName'] ?? '',
       email: json['email'] ?? '',
       phoneNumber: json['phoneNumber'] ?? '',
-      workerCategories: List<String>.from(json['workerCategories'] ?? []),
+      workerCategories: categoryList.map((item) => item.toString()).toList(),
       accountId: json['accountId'],
     );
   }
@@ -57,6 +62,7 @@ class Worker {
       'email': email,
       'phoneNumber': phoneNumber,
       'workerCategories': workerCategories,
+      'categories': workerCategories,
       'accountId': accountId,
     };
   }

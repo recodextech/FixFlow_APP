@@ -1,37 +1,19 @@
 import 'package:flutter/material.dart';
+import '../models/availability.dart';
 import '../models/worker.dart';
+import '../models/worker_job_suggestion.dart';
 import '../services/api_service.dart';
 
 class WorkerProvider extends ChangeNotifier {
   final ApiService _apiService = ApiService();
   
-  List<Worker> _workers = [];
   bool _isLoading = false;
   String? _error;
   List<Category> _categories = [];
 
-  List<Worker> get workers => _workers;
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Category> get categories => _categories;
-
-  /// Fetch all workers
-  Future<void> fetchWorkers() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      _workers = await _apiService.getWorkers();
-      _error = null;
-    } catch (e) {
-      _error = e.toString();
-      _workers = [];
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
 
   /// Fetch categories
   Future<void> fetchCategories() async {
@@ -63,7 +45,6 @@ class WorkerProvider extends ChangeNotifier {
         workerCategories: workerCategories,
       );
       _error = null;
-      await fetchWorkers(); // Refresh the list
       return result;
     } catch (e) {
       _error = e.toString();
@@ -75,13 +56,113 @@ class WorkerProvider extends ChangeNotifier {
   }
 
   /// Get a single worker
-  Future<Worker?> getWorker(String workerId) async {
+  Future<Worker?> getWorker(String workerId, {String? accountId}) async {
     try {
-      return await _apiService.getWorker(workerId);
+      return await _apiService.getWorker(workerId, accountId: accountId);
     } catch (e) {
       _error = e.toString();
       notifyListeners();
       return null;
     }
+  }
+
+  /// Create worker availability windows
+  Future<Map<String, dynamic>> createWorkerAvailability({
+    required String workerId,
+    required String accountId,
+    required WorkerAvailabilityRequest request,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _apiService.createWorkerAvailability(
+        workerId: workerId,
+        accountId: accountId,
+        request: request,
+      );
+      _error = null;
+      return result;
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Get worker availability windows
+  Future<WorkerAvailabilityResponse> getWorkerAvailabilities({
+    required String workerId,
+    String? accountId,
+  }) async {
+    try {
+      return await _apiService.getWorkerAvailabilities(
+        workerId: workerId,
+        accountId: accountId,
+      );
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return WorkerAvailabilityResponse(availabilities: [], total: 0);
+    }
+  }
+
+  /// Get suggested jobs for worker
+  Future<WorkerJobSuggestionResponse> getWorkerJobSuggestions({
+    required String workerId,
+    String? accountId,
+  }) async {
+    try {
+      return await _apiService.getWorkerJobSuggestions(
+        workerId: workerId,
+        accountId: accountId,
+      );
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return const WorkerJobSuggestionResponse(availableJobs: []);
+    }
+  }
+
+  /// Accept worker job
+  Future<void> acceptWorkerJob({
+    required String workerId,
+    required String jobId,
+    required String accountId,
+  }) async {
+    await _apiService.acceptWorkerJob(
+      workerId: workerId,
+      jobId: jobId,
+      accountId: accountId,
+    );
+  }
+
+  /// Start worker job
+  Future<void> startWorkerJob({
+    required String workerId,
+    required String jobId,
+    required String accountId,
+  }) async {
+    await _apiService.startWorkerJob(
+      workerId: workerId,
+      jobId: jobId,
+      accountId: accountId,
+    );
+  }
+
+  /// Mark worker job as success
+  Future<void> completeWorkerJobSuccess({
+    required String workerId,
+    required String jobId,
+    required String accountId,
+  }) async {
+    await _apiService.completeWorkerJobSuccess(
+      workerId: workerId,
+      jobId: jobId,
+      accountId: accountId,
+    );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/preferences_service.dart';
 import 'create_worker_screen.dart';
 import 'create_contractor_screen.dart';
+import 'switch_account_screen.dart';
 
 class SelectionScreen extends StatelessWidget {
   const SelectionScreen({super.key});
@@ -17,6 +18,12 @@ class SelectionScreen extends StatelessWidget {
     PreferencesService().setSelectedType('CONTRACTOR');
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const CreateContractorScreen()),
+    );
+  }
+
+  void _loginExisting(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const SwitchAccountScreen()),
     );
   }
 
@@ -199,6 +206,22 @@ class SelectionScreen extends StatelessWidget {
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  OutlinedButton.icon(
+                    onPressed: () => _loginExisting(context),
+                    icon: const Icon(Icons.login, color: Colors.white),
+                    label: const Text(
+                      'Login Existing Account',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.white70),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
                       ),
                     ),
                   ),
