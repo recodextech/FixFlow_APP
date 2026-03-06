@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/availability.dart';
 import '../models/contractor.dart';
 import '../models/worker.dart';
+import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
 import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
@@ -32,6 +33,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
   late Future<Worker?> _workerFuture;
   late Future<WorkerAvailabilityResponse> _availabilityFuture;
+  late Future<List<WorkerAssignedJob>> _pendingJobsFuture;
   late Future<WorkerJobSuggestionResponse> _jobSuggestionsFuture;
 
   final Map<String, String> _jobStatusOverrides = {};
@@ -51,6 +53,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           accountId: PreferencesService().getAccountId(),
         );
     _availabilityFuture = _loadAvailabilities();
+    _pendingJobsFuture = _loadPendingJobs();
     _jobSuggestionsFuture = _loadJobSuggestions();
   }
 
@@ -66,6 +69,19 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           workerId: widget.workerId,
           accountId: PreferencesService().getAccountId(),
         );
+  }
+
+  Future<List<WorkerAssignedJob>> _loadPendingJobs() {
+    return context.read<WorkerProvider>().getWorkerAssignedJobs(
+          workerId: widget.workerId,
+          accountId: PreferencesService().getAccountId(),
+        );
+  }
+
+  Future<void> _refreshPendingJobs() async {
+    setState(() {
+      _pendingJobsFuture = _loadPendingJobs();
+    });
   }
 
   Future<void> _refreshJobSuggestions() async {
@@ -109,6 +125,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
       setState(() {
         _jobStatusOverrides[jobId] = 'ACCEPTED';
+        _pendingJobsFuture = _loadPendingJobs();
       });
 
       _loadContractorContactIfNeeded(suggestion.jobInformation.contractorId);
@@ -168,6 +185,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
       setState(() {
         _jobStatusOverrides[jobId] = 'STARTED';
+        _pendingJobsFuture = _loadPendingJobs();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -225,6 +243,123 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
       setState(() {
         _jobStatusOverrides[jobId] = 'SUCCESS';
+        _pendingJobsFuture = _loadPendingJobs();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Job completed successfully')),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to complete job: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _jobActionInProgress.remove(jobId);
+        });
+      }
+    }
+  }
+
+  Future<void> _startPendingJob(WorkerAssignedJob job) async {
+    final accountId = PreferencesService().getAccountId();
+    final jobId = job.jobId;
+
+    if (accountId == null || accountId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account ID is missing. Please re-login.')),
+      );
+      return;
+    }
+
+    if (jobId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid job ID.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _jobActionInProgress.add(jobId);
+    });
+
+    try {
+      await context.read<WorkerProvider>().startWorkerJob(
+            workerId: widget.workerId,
+            jobId: jobId,
+            accountId: accountId,
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _jobStatusOverrides[jobId] = 'STARTED';
+        _pendingJobsFuture = _loadPendingJobs();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Job started successfully')),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to start job: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _jobActionInProgress.remove(jobId);
+        });
+      }
+    }
+  }
+
+  Future<void> _completePendingJob(WorkerAssignedJob job) async {
+    final accountId = PreferencesService().getAccountId();
+    final jobId = job.jobId;
+
+    if (accountId == null || accountId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account ID is missing. Please re-login.')),
+      );
+      return;
+    }
+
+    if (jobId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid job ID.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _jobActionInProgress.add(jobId);
+    });
+
+    try {
+      await context.read<WorkerProvider>().completeWorkerJobSuccess(
+            workerId: widget.workerId,
+            jobId: jobId,
+            accountId: accountId,
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _jobStatusOverrides[jobId] = 'SUCCESS';
+        _pendingJobsFuture = _loadPendingJobs();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -609,6 +744,81 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
+                      'Pending Jobs',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _refreshPendingJobs,
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ],
+                ),
+                FutureBuilder<List<WorkerAssignedJob>>(
+                  future: _pendingJobsFuture,
+                  builder: (context, pendingSnapshot) {
+                    if (pendingSnapshot.connectionState == ConnectionState.waiting) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+
+                    if (pendingSnapshot.hasError) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Error loading pending jobs: ${pendingSnapshot.error}',
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                          TextButton(
+                            onPressed: _refreshPendingJobs,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      );
+                    }
+
+                    final pendingJobs = (pendingSnapshot.data ?? [])
+                        .where(_isPendingAssignedJob)
+                        .toList();
+
+                    if (pendingJobs.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'No pending jobs available',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Total: ${pendingJobs.length}',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        const SizedBox(height: 8),
+                        ...pendingJobs.asMap().entries.map((entry) {
+                          return _buildPendingJobCard(
+                            entry.value,
+                            entry.key + 1,
+                          );
+                        }),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
                       'Suggested Jobs',
                       style: TextStyle(
                         fontSize: 18,
@@ -697,6 +907,151 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildPendingJobCard(WorkerAssignedJob job, int index) {
+    final status = _resolvePendingJobStatus(job);
+
+    _loadContractorContactIfNeeded(job.contractorId);
+
+    final contractor = _contractorCache[job.contractorId];
+    final isContractorLoading = _loadingContractorIds.contains(job.contractorId);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Pending Job $index',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Chip(
+                  label: Text(status),
+                  backgroundColor: _getStatusBackgroundColor(status),
+                  labelStyle: TextStyle(
+                    color: _getStatusTextColor(status),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildAvailabilityInfoRow(
+              'Assigned Status',
+              job.assignedJobStatus.isEmpty
+                  ? 'N/A'
+                  : job.assignedJobStatus.toUpperCase(),
+              Icons.assignment_turned_in,
+            ),
+            const SizedBox(height: 8),
+            _buildAvailabilityInfoRow(
+              'Job Status',
+              job.jobStatus.isEmpty ? 'N/A' : job.jobStatus.toUpperCase(),
+              Icons.info_outline,
+            ),
+            const SizedBox(height: 8),
+            _buildAvailabilityInfoRow(
+              'Contractor',
+              job.contractorName.isEmpty ? 'N/A' : job.contractorName,
+              Icons.business,
+            ),
+            const SizedBox(height: 8),
+            _buildAvailabilityInfoRow(
+              'Contractor Phone',
+              isContractorLoading
+                  ? 'Loading...'
+                  : _resolveContractorPhone(contractor),
+              Icons.phone,
+            ),
+            const SizedBox(height: 8),
+            _buildAvailabilityInfoRow(
+              'Start Time',
+              _formatAssignedJobStartTime(job),
+              Icons.schedule,
+            ),
+            const SizedBox(height: 8),
+            _buildAvailabilityInfoRow(
+              'Duration',
+              '${job.duration}h',
+              Icons.timer,
+            ),
+            const SizedBox(height: 8),
+            _buildAvailabilityInfoRow(
+              'Location',
+              '${job.latitude.toStringAsFixed(6)}, '
+                  '${job.longitude.toStringAsFixed(6)}',
+              Icons.location_on,
+            ),
+            const SizedBox(height: 12),
+            _buildPendingJobActionButtons(
+              job: job,
+              status: status,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingJobActionButtons({
+    required WorkerAssignedJob job,
+    required String status,
+  }) {
+    final jobId = job.jobId;
+    final isInProgress = _jobActionInProgress.contains(jobId);
+
+    final canStart = status == 'ACCEPTED';
+    final canSuccess = status == 'STARTED' || status == 'IN_PROGRESS';
+    final isCompleted = status == 'SUCCESS' || status == 'COMPLETED';
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (canStart)
+          ElevatedButton.icon(
+            onPressed: isInProgress ? null : () => _startPendingJob(job),
+            icon: isInProgress
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_arrow),
+            label: const Text('Start Job'),
+          ),
+        if (canSuccess)
+          ElevatedButton.icon(
+            onPressed: isInProgress ? null : () => _completePendingJob(job),
+            icon: isInProgress
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.task_alt),
+            label: const Text('Success Job'),
+          ),
+        if (isCompleted)
+          Chip(
+            label: const Text('Completed'),
+            backgroundColor: Colors.green.shade100,
+            labelStyle: TextStyle(
+              color: Colors.green.shade800,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+      ],
     );
   }
 
@@ -963,6 +1318,48 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     return serverStatus.toUpperCase();
   }
 
+  bool _isPendingAssignedJob(WorkerAssignedJob job) {
+    final assignedStatus = job.assignedJobStatus.trim().toUpperCase();
+    final jobStatus = _resolvePendingJobStatus(job);
+
+    const terminalAssignedStatuses = {
+      'UNASSIGNED',
+      'COMPLETED',
+      'CANCELLED',
+      'REJECTED',
+    };
+
+    const terminalJobStatuses = {
+      'SUCCESS',
+      'COMPLETED',
+      'CANCELLED',
+      'FAILED',
+    };
+
+    return !terminalAssignedStatuses.contains(assignedStatus) &&
+        !terminalJobStatuses.contains(jobStatus);
+  }
+
+  String _resolvePendingJobStatus(WorkerAssignedJob job) {
+    final jobId = job.jobId;
+    final overridden = _jobStatusOverrides[jobId];
+    if (overridden != null && overridden.isNotEmpty) {
+      return overridden.toUpperCase();
+    }
+
+    final normalizedJobStatus = job.jobStatus.trim();
+    if (normalizedJobStatus.isNotEmpty) {
+      return normalizedJobStatus.toUpperCase();
+    }
+
+    final normalizedAssignedStatus = job.assignedJobStatus.trim();
+    if (normalizedAssignedStatus.isNotEmpty) {
+      return normalizedAssignedStatus.toUpperCase();
+    }
+
+    return 'UNKNOWN';
+  }
+
   bool _showContractorAndDirection(String status) {
     return status == 'ACCEPTED' ||
         status == 'STARTED' ||
@@ -985,6 +1382,18 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   }
 
   String _formatSuggestedJobStartTime(SuggestedJobInformation job) {
+    if (job.jobStartTime != null) {
+      return _dateTimeFormat.format(job.jobStartTime!);
+    }
+
+    if (job.rawJobStartTime.isNotEmpty) {
+      return job.rawJobStartTime;
+    }
+
+    return 'N/A';
+  }
+
+  String _formatAssignedJobStartTime(WorkerAssignedJob job) {
     if (job.jobStartTime != null) {
       return _dateTimeFormat.format(job.jobStartTime!);
     }

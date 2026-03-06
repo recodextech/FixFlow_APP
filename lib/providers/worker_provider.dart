@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/availability.dart';
 import '../models/worker.dart';
+import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
 import '../services/api_service.dart';
 
@@ -124,6 +125,23 @@ class WorkerProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
       return const WorkerJobSuggestionResponse(availableJobs: []);
+    }
+  }
+
+  /// Get assigned jobs for worker
+  Future<List<WorkerAssignedJob>> getWorkerAssignedJobs({
+    required String workerId,
+    String? accountId,
+  }) async {
+    try {
+      return await _apiService.getWorkerAssignedJobs(
+        workerId: workerId,
+        accountId: accountId,
+      );
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return const [];
     }
   }
 

@@ -4,6 +4,7 @@ import '../models/availability.dart';
 import '../models/worker.dart';
 import '../models/contractor.dart';
 import '../models/process.dart';
+import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
 
 class ApiService {
@@ -221,6 +222,58 @@ class ApiService {
       return const WorkerJobSuggestionResponse(availableJobs: []);
     } catch (e) {
       print('Error fetching worker job suggestions: $e');
+      rethrow;
+    }
+  }
+
+  /// Get assigned jobs for a worker
+  Future<List<WorkerAssignedJob>> getWorkerAssignedJobs({
+    required String workerId,
+    String? accountId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/jobs/worker/$workerId/assigned'),
+        headers: _getHeaders(
+          accountId: accountId,
+          traceId: _buildTraceId(),
+          userId: workerId,
+        ),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to load worker assigned jobs: '
+          '${response.statusCode} - ${response.body}',
+        );
+      }
+
+      if (response.body.isEmpty) {
+        return const [];
+      }
+
+      final data = jsonDecode(response.body);
+
+      if (data is List<dynamic>) {
+        return data
+            .whereType<Map<String, dynamic>>()
+            .map(WorkerAssignedJob.fromJson)
+            .toList();
+      }
+
+      if (data is Map<String, dynamic>) {
+        final jobs = data['assignedJobs'] ?? data['jobs'] ?? data['pendingJobs'];
+        if (jobs is List<dynamic>) {
+          return jobs
+              .whereType<Map<String, dynamic>>()
+              .map(WorkerAssignedJob.fromJson)
+              .toList();
+        }
+      }
+
+      return const [];
+    } catch (e) {
+      print('Error fetching worker assigned jobs: $e');
       rethrow;
     }
   }
