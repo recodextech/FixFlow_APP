@@ -9,8 +9,9 @@ import '../models/worker_job_suggestion.dart';
 
 class ApiService {
   // Base URLs - can be configured via environment
-  static const String _baseUrl = 'http://localhost:8888';
-  static const String _managementUrl = 'http://localhost:8090';
+  static const String _baseUrl = 'http://188.166.179.208:8888';
+  static const String _managementUrl = 'http://188.166.179.208:8090';
+  // static const String _paymentEngineUrl = 'http://188.166.179.208:8070';
   static const String _paymentEngineUrl = 'http://localhost:8070';
   static const String _userId = 'flutter-client';
 
@@ -373,6 +374,68 @@ class ApiService {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } catch (e) {
       print('Error creating contractor: $e');
+      rethrow;
+    }
+  }
+
+  /// Update contractor by ID
+  Future<Contractor> updateContractor({
+    required String contractorId,
+    required String accountId,
+    required String contractorName,
+    required String contractorType,
+    required String email,
+    required String phoneNumber,
+  }) async {
+    try {
+      final payload = {
+        'contractorName': contractorName,
+        'contractorType': contractorType,
+        'email': email,
+        'phoneNumber': phoneNumber,
+      };
+
+      final response = await http.patch(
+        Uri.parse('$_managementUrl/contractors/$contractorId'),
+        headers: _getHeaders(
+          accountId: accountId,
+          traceId: _buildTraceId(),
+          userId: contractorId,
+        ),
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode != 200 &&
+          response.statusCode != 201 &&
+          response.statusCode != 202 &&
+          response.statusCode != 204) {
+        throw Exception(
+          'Failed to update contractor: ${response.statusCode} - ${response.body}',
+        );
+      }
+
+      if (response.body.isEmpty) {
+        final refreshed = await getContractor(
+          contractorId,
+          accountId: accountId,
+        );
+
+        return refreshed ??
+            Contractor(
+              id: contractorId,
+              contractorName: contractorName,
+              contractorType: contractorType,
+              email: email,
+              phoneNumber: phoneNumber,
+              accountId: accountId,
+            );
+      }
+
+      return Contractor.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    } catch (e) {
+      print('Error updating contractor: $e');
       rethrow;
     }
   }

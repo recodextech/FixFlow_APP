@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/availability.dart';
 import '../providers/worker_provider.dart';
 import '../services/preferences_service.dart';
+import '../widgets/home_navigation_button.dart';
 
 class CreateWorkerAvailabilityScreen extends StatefulWidget {
   final String workerId;
@@ -60,7 +61,8 @@ class _CreateWorkerAvailabilityScreenState
     final selected = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: _startDate ?? DateTime.now().subtract(const Duration(days: 365)),
+      firstDate:
+          _startDate ?? DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
 
@@ -151,7 +153,8 @@ class _CreateWorkerAvailabilityScreenState
     final accountId = PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account ID is missing. Please re-login.')),
+        const SnackBar(
+            content: Text('Account ID is missing. Please re-login.')),
       );
       return;
     }
@@ -211,6 +214,7 @@ class _CreateWorkerAvailabilityScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Create Availability'),
+        actions: const [HomeNavigationButton()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -238,7 +242,8 @@ class _CreateWorkerAvailabilityScreenState
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.recodextech.fixflow_app',
                     ),
                     MarkerLayer(
@@ -299,7 +304,9 @@ class _CreateWorkerAvailabilityScreenState
                     onPressed: _pickEndDate,
                     icon: const Icon(Icons.event),
                     label: Text(
-                      _endDate == null ? 'End Date' : _dateFormat.format(_endDate!),
+                      _endDate == null
+                          ? 'End Date'
+                          : _dateFormat.format(_endDate!),
                     ),
                   ),
                 ),

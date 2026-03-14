@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/client_provider.dart';
 import '../models/client.dart';
+import '../widgets/home_navigation_button.dart';
 import 'add_edit_client_screen.dart';
 
 class ClientListScreen extends StatelessWidget {
@@ -14,6 +15,7 @@ class ClientListScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('FixFlow Clients'),
         elevation: 2,
+        actions: const [HomeNavigationButton()],
       ),
       body: Consumer<ClientProvider>(
         builder: (context, provider, child) {
@@ -161,7 +163,8 @@ class ClientCard extends StatelessWidget {
                 context: context,
                 builder: (context) => AlertDialog(
                   title: const Text('Delete Client'),
-                  content: Text('Are you sure you want to delete ${client.name}?'),
+                  content:
+                      Text('Are you sure you want to delete ${client.name}?'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context, false),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/contractor_provider.dart';
 import '../providers/worker_provider.dart';
 import '../services/preferences_service.dart';
+import '../widgets/home_navigation_button.dart';
 import 'selection_screen.dart';
 
 enum _LoginType { worker, contractor }
@@ -26,6 +27,46 @@ class _SwitchAccountScreenState extends State<SwitchAccountScreen> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const SelectionScreen()),
     );
+  }
+
+  Future<void> _quickSwitchToWorker() async {
+    final preferences = PreferencesService();
+    final workerId = preferences.getWorkerId();
+
+    if (workerId == null || workerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No saved worker profile found')),
+      );
+      return;
+    }
+
+    await preferences.activateWorkerProfile();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
+  }
+
+  Future<void> _quickSwitchToContractor() async {
+    final preferences = PreferencesService();
+    final contractorId = preferences.getContractorId();
+
+    if (contractorId == null || contractorId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No saved contractor profile found')),
+      );
+      return;
+    }
+
+    await preferences.activateContractorProfile();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
   }
 
   Future<void> _loginExistingProfile() async {
@@ -53,32 +94,34 @@ class _SwitchAccountScreenState extends State<SwitchAccountScreen> {
           throw Exception('Worker not found for the provided account and ID');
         }
 
-        await preferences.clearAll();
-        await preferences.setSelectedType('WORKER');
-        await preferences.setAccountId(
-          worker.accountId?.isNotEmpty == true ? worker.accountId! : accountId,
-        );
+        final workerAccountId = worker.accountId?.isNotEmpty == true
+            ? worker.accountId!
+            : accountId;
+
         await preferences.setWorkerId(worker.id);
         await preferences.setWorkerName(worker.workerName);
+        await preferences.setWorkerAccountId(workerAccountId);
+        await preferences.activateWorkerProfile();
       } else {
-        final contractor = await context.read<ContractorProvider>().getContractor(
-              profileId,
-              accountId: accountId,
-            );
+        final contractor =
+            await context.read<ContractorProvider>().getContractor(
+                  profileId,
+                  accountId: accountId,
+                );
 
         if (contractor == null) {
-          throw Exception('Contractor not found for the provided account and ID');
+          throw Exception(
+              'Contractor not found for the provided account and ID');
         }
 
-        await preferences.clearAll();
-        await preferences.setSelectedType('CONTRACTOR');
-        await preferences.setAccountId(
-          contractor.accountId?.isNotEmpty == true
-              ? contractor.accountId!
-              : accountId,
-        );
+        final contractorAccountId = contractor.accountId?.isNotEmpty == true
+            ? contractor.accountId!
+            : accountId;
+
         await preferences.setContractorId(contractor.id);
         await preferences.setContractorName(contractor.contractorName);
+        await preferences.setContractorAccountId(contractorAccountId);
+        await preferences.activateContractorProfile();
       }
 
       if (!mounted) {
@@ -109,10 +152,18 @@ class _SwitchAccountScreenState extends State<SwitchAccountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final preferences = PreferencesService();
+    final savedWorkerId = preferences.getWorkerId();
+    final savedContractorId = preferences.getContractorId();
+    final hasSavedWorker = savedWorkerId != null && savedWorkerId.isNotEmpty;
+    final hasSavedContractor =
+        savedContractorId != null && savedContractorId.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Switch Account'),
         actions: [
+          const HomeNavigationButton(),
           IconButton(
             icon: const Icon(Icons.add),
             tooltip: 'Create New Account',
@@ -134,6 +185,50 @@ class _SwitchAccountScreenState extends State<SwitchAccountScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (hasSavedWorker || hasSavedContractor) ...[
+                          const Text(
+                            'Quick Switch',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Use last logged-in profile without entering IDs again.',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                          const SizedBox(height: 12),
+                          if (hasSavedWorker)
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _quickSwitchToWorker,
+                                icon: const Icon(Icons.people),
+                                label: Text(
+                                  'Switch to Worker: '
+                                  '${preferences.getWorkerName() ?? savedWorkerId}',
+                                ),
+                              ),
+                            ),
+                          if (hasSavedContractor) ...[
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _quickSwitchToContractor,
+                                icon: const Icon(Icons.business),
+                                label: Text(
+                                  'Switch to Contractor: '
+                                  '${preferences.getContractorName() ?? savedContractorId}',
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          const Divider(),
+                          const SizedBox(height: 16),
+                        ],
                         const Text(
                           'Login Existing Profile',
                           style: TextStyle(
@@ -202,7 +297,8 @@ class _SwitchAccountScreenState extends State<SwitchAccountScreen> {
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton(
-                          onPressed: _isSubmitting ? null : _loginExistingProfile,
+                          onPressed:
+                              _isSubmitting ? null : _loginExistingProfile,
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
@@ -210,7 +306,8 @@ class _SwitchAccountScreenState extends State<SwitchAccountScreen> {
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : Text(
                                   _loginType == _LoginType.worker

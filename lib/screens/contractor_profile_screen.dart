@@ -8,6 +8,8 @@ import '../models/worker.dart';
 import '../providers/contractor_provider.dart';
 import '../services/preferences_service.dart';
 import '../services/api_service.dart';
+import '../widgets/home_navigation_button.dart';
+import 'contractor_info_screen.dart';
 import 'switch_account_screen.dart';
 
 class ContractorProfileScreen extends StatefulWidget {
@@ -19,7 +21,8 @@ class ContractorProfileScreen extends StatefulWidget {
   });
 
   @override
-  State<ContractorProfileScreen> createState() => _ContractorProfileScreenState();
+  State<ContractorProfileScreen> createState() =>
+      _ContractorProfileScreenState();
 }
 
 class _ContractorProfileScreenState extends State<ContractorProfileScreen> {
@@ -31,9 +34,9 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen> {
     super.initState();
     final accountId = PreferencesService().getAccountId();
     _contractorFuture = context.read<ContractorProvider>().getContractor(
-      widget.contractorId,
-      accountId: accountId,
-    );
+          widget.contractorId,
+          accountId: accountId,
+        );
     _processesFuture = _loadContractorProcesses();
   }
 
@@ -65,7 +68,8 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen> {
                 ),
               );
             },
-            child: const Text('Switch Account', style: TextStyle(color: Colors.red)),
+            child: const Text('Switch Account',
+                style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -100,16 +104,45 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen> {
     );
   }
 
+  Future<void> _openContractorInfo({Contractor? contractor}) async {
+    final updatedContractor = await Navigator.of(context).push<Contractor>(
+      MaterialPageRoute(
+        builder: (_) => ContractorInfoScreen(
+          contractorId: widget.contractorId,
+          initialContractor: contractor,
+        ),
+      ),
+    );
+
+    if (!mounted || updatedContractor == null) {
+      return;
+    }
+
+    setState(() {
+      _contractorFuture = Future.value(updatedContractor);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Contractor information updated')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Contractor Profile'),
         actions: [
+          const HomeNavigationButton(),
           IconButton(
             icon: const Icon(Icons.add_task),
             tooltip: 'Create Process',
             onPressed: _showCreateProcessDialog,
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'View/Edit Contractor Information',
+            onPressed: _openContractorInfo,
           ),
           PopupMenuButton(
             itemBuilder: (context) => [
@@ -161,14 +194,14 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.business_outlined, size: 64, color: Colors.grey),
+                  const Icon(Icons.business_outlined,
+                      size: 64, color: Colors.grey),
                   const SizedBox(height: 16),
                   const Text('Contractor profile not found'),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
-                      Navigator.of(context)
-                          .pushNamedAndRemoveUntil('/', (_) => false);
+                      navigateToHomeScreen(context);
                     },
                     child: const Text('Go to Home'),
                   ),
@@ -240,58 +273,33 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                // Personal Information
                 const Text(
-                  'Company Information',
+                  'Important Details',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 12),
-                _buildInfoCard('Company Name', contractor.contractorName, Icons.business),
-                const SizedBox(height: 12),
-                _buildInfoCard('Type', contractor.contractorType, Icons.category),
+                _buildInfoCard(
+                    'Type', contractor.contractorType, Icons.category),
                 const SizedBox(height: 12),
                 _buildInfoCard('Email', contractor.email, Icons.email),
                 const SizedBox(height: 12),
                 _buildInfoCard('Phone', contractor.phoneNumber, Icons.phone),
-                const SizedBox(height: 12),
-                _buildInfoCard(
-                  'Account ID',
-                  contractor.accountId ?? 'N/A',
-                  Icons.account_circle,
-                ),
-                const SizedBox(height: 24),
-                // Type Badge
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: contractor.contractorType == 'COMPANY'
-                            ? Colors.blue.shade100
-                            : Colors.purple.shade100,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        contractor.contractorType,
-                        style: TextStyle(
-                          color: contractor.contractorType == 'COMPANY'
-                              ? Colors.blue.shade800
-                              : Colors.purple.shade800,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _openContractorInfo(contractor: contractor),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('View / Edit Contractor Information'),
+                  ),
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Created Processes',
+                  'Process History',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -301,7 +309,8 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen> {
                 FutureBuilder<List<ContractorProcessSummary>>(
                   future: _processesFuture,
                   builder: (context, processSnapshot) {
-                    if (processSnapshot.connectionState == ConnectionState.waiting) {
+                    if (processSnapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
 
@@ -345,19 +354,33 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen> {
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Text('No processes created yet'),
+                        child: const Text('No process history available'),
                       );
                     }
 
+                    final ongoingProcesses = processes
+                        .where((process) => !_isCompletedStatus(process.status))
+                        .toList();
+
+                    final completedProcesses = processes
+                        .where((process) => _isCompletedStatus(process.status))
+                        .toList();
+
                     return Column(
-                      children: processes
-                          .map(
-                            (process) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _buildProcessCard(process),
-                            ),
-                          )
-                          .toList(),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildProcessSection(
+                          title: 'Ongoing Processes',
+                          processes: ongoingProcesses,
+                          emptyText: 'No ongoing processes',
+                        ),
+                        const SizedBox(height: 16),
+                        _buildProcessSection(
+                          title: 'Completed Processes',
+                          processes: completedProcesses,
+                          emptyText: 'No completed processes',
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -367,6 +390,51 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen> {
           );
         },
       ),
+    );
+  }
+
+  bool _isCompletedStatus(String status) {
+    return status.trim().toUpperCase() == 'COMPLETED';
+  }
+
+  Widget _buildProcessSection({
+    required String title,
+    required List<ContractorProcessSummary> processes,
+    required String emptyText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (processes.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(emptyText),
+          )
+        else
+          Column(
+            children: processes
+                .map(
+                  (process) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildProcessCard(process),
+                  ),
+                )
+                .toList(),
+          ),
+      ],
     );
   }
 
@@ -539,11 +607,11 @@ class _CreateProcessDialog extends StatefulWidget {
 
 class _CreateProcessDialogState extends State<_CreateProcessDialog> {
   static const LatLng _defaultLocation = LatLng(6.927079, 79.861244);
-  
+
   final _formKey = GlobalKey<FormState>();
   final _processNameController = TextEditingController();
   final _processDescriptionController = TextEditingController();
-  
+
   // Job fields
   final _jobDescriptionController = TextEditingController();
   final _startTimeController = TextEditingController();
@@ -563,8 +631,7 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
   void initState() {
     super.initState();
     _mapController = MapController();
-    _categoriesFuture =
-        ApiService().getCategories(accountId: widget.accountId);
+    _categoriesFuture = ApiService().getCategories(accountId: widget.accountId);
     _walletsFuture = ApiService().getWallets(accountId: widget.accountId);
   }
 
@@ -655,13 +722,13 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
 
     if (time == null) return;
 
-    final dateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    final formattedDateTime =
-      '${dateTime.year.toString().padLeft(4, '0')}-'
-      '${dateTime.month.toString().padLeft(2, '0')}-'
-      '${dateTime.day.toString().padLeft(2, '0')}T'
-      '${dateTime.hour.toString().padLeft(2, '0')}:'
-      '${dateTime.minute.toString().padLeft(2, '0')}';
+    final dateTime =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final formattedDateTime = '${dateTime.year.toString().padLeft(4, '0')}-'
+        '${dateTime.month.toString().padLeft(2, '0')}-'
+        '${dateTime.day.toString().padLeft(2, '0')}T'
+        '${dateTime.hour.toString().padLeft(2, '0')}:'
+        '${dateTime.minute.toString().padLeft(2, '0')}';
 
     _startTimeController.text = formattedDateTime;
   }
@@ -824,7 +891,8 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
                         ),
                         children: [
                           TileLayer(
-                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                             userAgentPackageName: 'com.recodextech.fixflow_app',
                           ),
                           MarkerLayer(
@@ -932,7 +1000,8 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
                     child: Column(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.blue.shade50,
                             borderRadius: const BorderRadius.only(
@@ -973,10 +1042,12 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
                         FutureBuilder<List<Category>>(
                           future: _categoriesFuture,
                           builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
                               return const SizedBox(
                                 height: 100,
-                                child: Center(child: CircularProgressIndicator()),
+                                child:
+                                    Center(child: CircularProgressIndicator()),
                               );
                             }
 
@@ -997,15 +1068,18 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
                                   final category = categories[index];
                                   return CheckboxListTile(
                                     title: Text(category.name),
-                                    value: _selectedCategories.contains(category.id),
+                                    value: _selectedCategories
+                                        .contains(category.id),
                                     dense: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12),
                                     onChanged: (bool? value) {
                                       setState(() {
                                         if (value == true) {
                                           _selectedCategories.add(category.id);
                                         } else {
-                                          _selectedCategories.remove(category.id);
+                                          _selectedCategories
+                                              .remove(category.id);
                                         }
                                       });
                                     },
@@ -1041,7 +1115,8 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
                       if (snapshot.hasError) {
                         return Padding(
                           padding: const EdgeInsets.all(8),
-                          child: Text('Error loading wallets: ${snapshot.error}'),
+                          child:
+                              Text('Error loading wallets: ${snapshot.error}'),
                         );
                       }
 
@@ -1090,7 +1165,8 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
                       prefixIcon: const Icon(Icons.attach_money),
                       prefixText: ' ',
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
                         return 'Please enter amount';
@@ -1106,7 +1182,8 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: _isSubmitting ? null : () => Navigator.pop(context),
+                        onPressed:
+                            _isSubmitting ? null : () => Navigator.pop(context),
                         child: const Text('Cancel'),
                       ),
                       const SizedBox(width: 12),
@@ -1116,7 +1193,8 @@ class _CreateProcessDialogState extends State<_CreateProcessDialog> {
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Text('Create Process'),
                       ),

@@ -40,6 +40,39 @@ class ContractorProvider extends ChangeNotifier {
     }
   }
 
+  /// Update an existing contractor
+  Future<Contractor> updateContractor({
+    required String contractorId,
+    required String accountId,
+    required String contractorName,
+    required String contractorType,
+    required String email,
+    required String phoneNumber,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _apiService.updateContractor(
+        contractorId: contractorId,
+        accountId: accountId,
+        contractorName: contractorName,
+        contractorType: contractorType,
+        email: email,
+        phoneNumber: phoneNumber,
+      );
+      _error = null;
+      return result;
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Get a single contractor
   Future<Contractor?> getContractor(String contractorId, {String? accountId}) async {
     try {

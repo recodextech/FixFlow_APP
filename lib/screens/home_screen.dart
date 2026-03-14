@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/preferences_service.dart';
+import '../widgets/home_navigation_button.dart';
 import 'worker_profile_screen.dart';
 import 'contractor_profile_screen.dart';
 import 'switch_account_screen.dart';
@@ -12,6 +13,38 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  Future<void> _openWorkerProfile(String workerId) async {
+    final preferences = PreferencesService();
+    await preferences.activateWorkerProfile();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WorkerProfileScreen(workerId: workerId),
+      ),
+    );
+  }
+
+  Future<void> _openContractorProfile(String contractorId) async {
+    final preferences = PreferencesService();
+    await preferences.activateContractorProfile();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            ContractorProfileScreen(contractorId: contractorId),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('FixFlow - Worker & Contractor Manager'),
         elevation: 0,
+        actions: const [HomeNavigationButton()],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -58,13 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     ElevatedButton.icon(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              WorkerProfileScreen(workerId: workerProfile),
-                        ),
-                      ),
+                      onPressed: () => _openWorkerProfile(workerProfile),
                       icon: const Icon(Icons.arrow_forward),
                       label: const Text('View'),
                     ),
@@ -101,13 +129,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     ElevatedButton.icon(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ContractorProfileScreen(contractorId: contractorProfile),
-                        ),
-                      ),
+                      onPressed: () =>
+                          _openContractorProfile(contractorProfile),
                       icon: const Icon(Icons.arrow_forward),
                       label: const Text('View'),
                     ),

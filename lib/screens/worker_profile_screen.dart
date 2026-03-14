@@ -3,7 +3,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import '../models/availability.dart';
 import '../models/contractor.dart';
 import '../models/worker.dart';
 import '../models/worker_assigned_job.dart';
@@ -11,8 +10,9 @@ import '../models/worker_job_suggestion.dart';
 import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
 import '../services/preferences_service.dart';
-import 'create_worker_availability_screen.dart';
+import '../widgets/home_navigation_button.dart';
 import 'switch_account_screen.dart';
+import 'worker_details_screen.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   final String workerId;
@@ -27,12 +27,10 @@ class WorkerProfileScreen extends StatefulWidget {
 }
 
 class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
-  final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
   final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
   final Distance _distance = const Distance();
 
   late Future<Worker?> _workerFuture;
-  late Future<WorkerAvailabilityResponse> _availabilityFuture;
   late Future<List<WorkerAssignedJob>> _pendingJobsFuture;
   late Future<WorkerJobSuggestionResponse> _jobSuggestionsFuture;
 
@@ -52,16 +50,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           widget.workerId,
           accountId: PreferencesService().getAccountId(),
         );
-    _availabilityFuture = _loadAvailabilities();
     _pendingJobsFuture = _loadPendingJobs();
     _jobSuggestionsFuture = _loadJobSuggestions();
-  }
-
-  Future<WorkerAvailabilityResponse> _loadAvailabilities() {
-    return context.read<WorkerProvider>().getWorkerAvailabilities(
-          workerId: widget.workerId,
-          accountId: PreferencesService().getAccountId(),
-        );
   }
 
   Future<WorkerJobSuggestionResponse> _loadJobSuggestions() {
@@ -96,7 +86,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account ID is missing. Please re-login.')),
+        const SnackBar(
+            content: Text('Account ID is missing. Please re-login.')),
       );
       return;
     }
@@ -156,7 +147,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account ID is missing. Please re-login.')),
+        const SnackBar(
+            content: Text('Account ID is missing. Please re-login.')),
       );
       return;
     }
@@ -214,7 +206,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account ID is missing. Please re-login.')),
+        const SnackBar(
+            content: Text('Account ID is missing. Please re-login.')),
       );
       return;
     }
@@ -272,7 +265,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account ID is missing. Please re-login.')),
+        const SnackBar(
+            content: Text('Account ID is missing. Please re-login.')),
       );
       return;
     }
@@ -330,7 +324,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account ID is missing. Please re-login.')),
+        const SnackBar(
+            content: Text('Account ID is missing. Please re-login.')),
       );
       return;
     }
@@ -437,23 +432,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     }
   }
 
-  Future<void> _createAvailability() async {
-    final result = await Navigator.of(context).push<bool>(
+  void _openWorkerDetails() {
+    Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) =>
-            CreateWorkerAvailabilityScreen(workerId: widget.workerId),
+        builder: (_) => WorkerDetailsScreen(workerId: widget.workerId),
       ),
     );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (result == true) {
-      setState(() {
-        _availabilityFuture = _loadAvailabilities();
-      });
-    }
   }
 
   void _switchProfile() {
@@ -476,7 +460,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                 ),
               );
             },
-            child: const Text('Switch Account', style: TextStyle(color: Colors.red)),
+            child: const Text('Switch Account',
+                style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -489,12 +474,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       appBar: AppBar(
         title: const Text('Worker Profile'),
         actions: [
+          const HomeNavigationButton(),
           PopupMenuButton(
             itemBuilder: (context) => [
-              PopupMenuItem(
-                onTap: _createAvailability,
-                child: const Text('Create Availability'),
-              ),
               PopupMenuItem(
                 onTap: _switchProfile,
                 child: const Text('Switch Profile'),
@@ -521,9 +503,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
-                      setState(() {
-                        _loadProfileData();
-                      });
+                      setState(_loadProfileData);
                     },
                     child: const Text('Retry'),
                   ),
@@ -532,19 +512,21 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
             );
           }
 
-          if (snapshot.data == null) {
+          final worker = snapshot.data;
+
+          if (worker == null) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.person_outline, size: 64, color: Colors.grey),
+                  const Icon(Icons.person_outline,
+                      size: 64, color: Colors.grey),
                   const SizedBox(height: 16),
                   const Text('Worker profile not found'),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
-                      Navigator.of(context)
-                          .pushNamedAndRemoveUntil('/', (_) => false);
+                      navigateToHomeScreen(context);
                     },
                     child: const Text('Go to Home'),
                   ),
@@ -553,191 +535,31 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
             );
           }
 
-          final worker = snapshot.data!;
-
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Profile Header
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.green.shade400, Colors.green.shade600],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundColor: Colors.white,
-                            child: Text(
-                              worker.workerName[0].toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  worker.workerName,
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'ID: ${worker.id}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Personal Information
-                const Text(
-                  'Personal Information',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _buildInfoCard('Email', worker.email, Icons.email),
-                const SizedBox(height: 12),
-                _buildInfoCard('Phone', worker.phoneNumber, Icons.phone),
-                const SizedBox(height: 12),
-                _buildInfoCard('Account ID', worker.accountId ?? 'N/A', Icons.account_circle),
-                const SizedBox(height: 24),
-                // Categories
-                const Text(
-                  'Categories',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (worker.categories.isEmpty)
-                  const Text(
-                    'No categories assigned',
-                    style: TextStyle(color: Colors.grey),
-                  )
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: worker.categories.map((category) {
-                      return Chip(
-                        label: Text(category),
-                        backgroundColor: Colors.green.shade100,
-                        labelStyle: TextStyle(color: Colors.green.shade800),
-                      );
-                    }).toList(),
-                  ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Availability Windows',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _availabilityFuture = _loadAvailabilities();
-                        });
-                      },
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
-                ),
-                FutureBuilder<WorkerAvailabilityResponse>(
-                  future: _availabilityFuture,
-                  builder: (context, availabilitySnapshot) {
-                    if (availabilitySnapshot.connectionState == ConnectionState.waiting) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-
-                    if (availabilitySnapshot.hasError) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Error loading availabilities: ${availabilitySnapshot.error}',
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _availabilityFuture = _loadAvailabilities();
-                              });
-                            },
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      );
-                    }
-
-                    final response = availabilitySnapshot.data ??
-                        WorkerAvailabilityResponse(availabilities: [], total: 0);
-
-                    if (response.availabilities.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.only(top: 8),
-                        child: Text(
-                          'No availability windows found',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      );
-                    }
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Total: ${response.total}',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                        const SizedBox(height: 8),
-                        ...response.availabilities.asMap().entries.map((entry) {
-                          return _buildAvailabilityCard(
-                            entry.value,
-                            entry.key + 1,
-                          );
-                        }),
-                      ],
+                FutureBuilder<List<WorkerAssignedJob>>(
+                  future: _pendingJobsFuture,
+                  builder: (context, pendingStatusSnapshot) {
+                    final status = _resolveWorkerOverallStatus(
+                      pendingStatusSnapshot,
                     );
+                    return _buildProfileHeader(worker, status);
                   },
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _openWorkerDetails,
+                    icon: const Icon(Icons.badge_outlined),
+                    label: const Text('View Worker Details & Availability'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -759,7 +581,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                 FutureBuilder<List<WorkerAssignedJob>>(
                   future: _pendingJobsFuture,
                   builder: (context, pendingSnapshot) {
-                    if (pendingSnapshot.connectionState == ConnectionState.waiting) {
+                    if (pendingSnapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
                         child: Center(child: CircularProgressIndicator()),
@@ -889,23 +712,85 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                     );
                   },
                 ),
-                const SizedBox(height: 24),
-                // Action Buttons
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _createAvailability,
-                    icon: const Icon(Icons.calendar_month),
-                    label: const Text('Create Availability'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildProfileHeader(Worker worker, String status) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.green.shade400, Colors.green.shade600],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 40,
+            backgroundColor: Colors.white,
+            child: Text(
+              _workerInitial(worker.workerName),
+              style: const TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  worker.workerName,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'ID: ${worker.id}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  children: [
+                    const Text(
+                      'Status',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Chip(
+                      label: Text(status),
+                      backgroundColor: _getWorkerStatusBackgroundColor(status),
+                      labelStyle: TextStyle(
+                        color: _getWorkerStatusTextColor(status),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -916,7 +801,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     _loadContractorContactIfNeeded(job.contractorId);
 
     final contractor = _contractorCache[job.contractorId];
-    final isContractorLoading = _loadingContractorIds.contains(job.contractorId);
+    final isContractorLoading =
+        _loadingContractorIds.contains(job.contractorId);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -946,7 +832,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Assigned Status',
               job.assignedJobStatus.isEmpty
                   ? 'N/A'
@@ -954,19 +840,19 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               Icons.assignment_turned_in,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Job Status',
               job.jobStatus.isEmpty ? 'N/A' : job.jobStatus.toUpperCase(),
               Icons.info_outline,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Contractor',
               job.contractorName.isEmpty ? 'N/A' : job.contractorName,
               Icons.business,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Contractor Phone',
               isContractorLoading
                   ? 'Loading...'
@@ -974,19 +860,19 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               Icons.phone,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Start Time',
               _formatAssignedJobStartTime(job),
               Icons.schedule,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Duration',
               '${job.duration}h',
               Icons.timer,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Location',
               '${job.latitude.toStringAsFixed(6)}, '
                   '${job.longitude.toStringAsFixed(6)}',
@@ -1066,7 +952,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     }
 
     final contractor = _contractorCache[job.contractorId];
-    final isContractorLoading = _loadingContractorIds.contains(job.contractorId);
+    final isContractorLoading =
+        _loadingContractorIds.contains(job.contractorId);
 
     final workerPoint = LatLng(
       workerInfo.workerLatitude,
@@ -1076,7 +963,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       job.jobLatitude,
       job.jobLongitude,
     );
-    final distanceKm = _distance.as(LengthUnit.Kilometer, workerPoint, jobPoint);
+    final distanceKm =
+        _distance.as(LengthUnit.Kilometer, workerPoint, jobPoint);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1106,45 +994,45 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Category',
               job.jobCategory.isEmpty ? 'N/A' : job.jobCategory,
               Icons.category,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Contractor',
               job.contractorCompany.isEmpty ? 'N/A' : job.contractorCompany,
               Icons.business,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Start Time',
               _formatSuggestedJobStartTime(job),
               Icons.schedule,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Duration',
               '${job.jobDurationHours}h',
               Icons.timer,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Location',
               '${job.jobLatitude.toStringAsFixed(6)}, '
                   '${job.jobLongitude.toStringAsFixed(6)}',
               Icons.location_on,
             ),
             const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
+            _buildInfoRow(
               'Direction Distance',
               '${distanceKm.toStringAsFixed(2)} km',
               Icons.alt_route,
             ),
             if (showContractorAndDirection) ...[
               const SizedBox(height: 8),
-              _buildAvailabilityInfoRow(
+              _buildInfoRow(
                 'Contractor Phone',
                 isContractorLoading
                     ? 'Loading...'
@@ -1202,7 +1090,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
       children: [
         if (canAccept)
           ElevatedButton.icon(
-            onPressed: isInProgress ? null : () => _acceptSuggestedJob(suggestion),
+            onPressed:
+                isInProgress ? null : () => _acceptSuggestedJob(suggestion),
             icon: isInProgress
                 ? const SizedBox(
                     width: 14,
@@ -1214,7 +1103,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           ),
         if (canStart)
           ElevatedButton.icon(
-            onPressed: isInProgress ? null : () => _startAcceptedJob(suggestion),
+            onPressed:
+                isInProgress ? null : () => _startAcceptedJob(suggestion),
             icon: isInProgress
                 ? const SizedBox(
                     width: 14,
@@ -1226,7 +1116,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           ),
         if (canSuccess)
           ElevatedButton.icon(
-            onPressed: isInProgress ? null : () => _completeStartedJob(suggestion),
+            onPressed:
+                isInProgress ? null : () => _completeStartedJob(suggestion),
             icon: isInProgress
                 ? const SizedBox(
                     width: 14,
@@ -1300,6 +1191,60 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
         ),
       ],
     );
+  }
+
+  Widget _buildInfoRow(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: Colors.green.shade600),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '$label: $value',
+            style: const TextStyle(fontSize: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _resolveWorkerOverallStatus(
+    AsyncSnapshot<List<WorkerAssignedJob>> snapshot,
+  ) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return 'LOADING';
+    }
+
+    if (snapshot.hasError) {
+      return 'UNKNOWN';
+    }
+
+    final jobs = snapshot.data ?? const [];
+    return _deriveWorkerStatus(jobs);
+  }
+
+  String _deriveWorkerStatus(List<WorkerAssignedJob> jobs) {
+    final activeJobs = jobs.where(_isPendingAssignedJob).toList();
+
+    final hasStartedJob = activeJobs.any((job) {
+      final status = _resolvePendingJobStatus(job);
+      return status == 'STARTED' || status == 'IN_PROGRESS';
+    });
+
+    if (hasStartedJob) {
+      return 'BUSY';
+    }
+
+    final hasAssignedJob = activeJobs.any((job) {
+      final status = _resolvePendingJobStatus(job);
+      return status == 'ACCEPTED' || status == 'PENDING';
+    });
+
+    if (hasAssignedJob) {
+      return 'ASSIGNED';
+    }
+
+    return 'IDLE';
   }
 
   String _resolveSuggestionStatus(WorkerJobSuggestion suggestion) {
@@ -1439,164 +1384,44 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     }
   }
 
-  Widget _buildAvailabilityCard(WorkerAvailability availability, int index) {
-    final status = availability.status.toUpperCase();
-    final isOnline = status == 'ONLINE';
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Availability $index',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                Chip(
-                  label: Text(status.isEmpty ? 'UNKNOWN' : status),
-                  backgroundColor:
-                      isOnline ? Colors.green.shade100 : Colors.grey.shade300,
-                  labelStyle: TextStyle(
-                    color: isOnline ? Colors.green.shade800 : Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
-              'Location',
-              '${availability.latitude.toStringAsFixed(6)}, '
-                  '${availability.longitude.toStringAsFixed(6)}',
-              Icons.location_on,
-            ),
-            const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
-              'Date Range',
-              '${_formatDate(availability.startDate)} → ${_formatDate(availability.endDate)}',
-              Icons.date_range,
-            ),
-            const SizedBox(height: 8),
-            _buildAvailabilityInfoRow(
-              'Frequency',
-              availability.frequency.isEmpty ? 'N/A' : availability.frequency,
-              Icons.repeat,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Windows',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (availability.windows.isEmpty)
-              const Text(
-                'No windows available',
-                style: TextStyle(color: Colors.grey),
-              )
-            else
-              Column(
-                children: availability.windows.map((window) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.schedule, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(_formatDateTime(window.startTime)),
-                        ),
-                        Text('Duration: ${window.duration}h'),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-          ],
-        ),
-      ),
-    );
+  Color _getWorkerStatusBackgroundColor(String status) {
+    switch (status) {
+      case 'BUSY':
+        return Colors.indigo.shade100;
+      case 'ASSIGNED':
+        return Colors.blue.shade100;
+      case 'IDLE':
+        return Colors.green.shade100;
+      case 'LOADING':
+      case 'UNKNOWN':
+        return Colors.grey.shade300;
+      default:
+        return Colors.grey.shade300;
+    }
   }
 
-  Widget _buildAvailabilityInfoRow(String label, String value, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: Colors.green.shade600),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            '$label: $value',
-            style: const TextStyle(fontSize: 14),
-          ),
-        ),
-      ],
-    );
+  Color _getWorkerStatusTextColor(String status) {
+    switch (status) {
+      case 'BUSY':
+        return Colors.indigo.shade800;
+      case 'ASSIGNED':
+        return Colors.blue.shade800;
+      case 'IDLE':
+        return Colors.green.shade800;
+      case 'LOADING':
+      case 'UNKNOWN':
+        return Colors.black87;
+      default:
+        return Colors.black87;
+    }
   }
 
-  String _formatDate(DateTime? date) {
-    if (date == null) {
-      return 'N/A';
+  String _workerInitial(String workerName) {
+    final trimmed = workerName.trim();
+    if (trimmed.isEmpty) {
+      return 'W';
     }
 
-    return _dateFormat.format(date);
-  }
-
-  String _formatDateTime(DateTime? dateTime) {
-    if (dateTime == null) {
-      return 'N/A';
-    }
-
-    return _dateTimeFormat.format(dateTime);
-  }
-
-  Widget _buildInfoCard(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.green.shade600),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+    return trimmed[0].toUpperCase();
   }
 }

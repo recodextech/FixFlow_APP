@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/client.dart';
 import '../providers/client_provider.dart';
+import '../widgets/home_navigation_button.dart';
 
 class AddEditClientScreen extends StatefulWidget {
   final Client? client;
@@ -26,7 +27,8 @@ class _AddEditClientScreenState extends State<AddEditClientScreen> {
     _nameController = TextEditingController(text: widget.client?.name ?? '');
     _emailController = TextEditingController(text: widget.client?.email ?? '');
     _phoneController = TextEditingController(text: widget.client?.phone ?? '');
-    _companyController = TextEditingController(text: widget.client?.company ?? '');
+    _companyController =
+        TextEditingController(text: widget.client?.company ?? '');
   }
 
   @override
@@ -68,7 +70,9 @@ class _AddEditClientScreenState extends State<AddEditClientScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              widget.client == null ? 'Client added successfully' : 'Client updated successfully',
+              widget.client == null
+                  ? 'Client added successfully'
+                  : 'Client updated successfully',
             ),
           ),
         );
@@ -97,6 +101,7 @@ class _AddEditClientScreenState extends State<AddEditClientScreen> {
       appBar: AppBar(
         title: Text(widget.client == null ? 'Add Client' : 'Edit Client'),
         elevation: 2,
+        actions: const [HomeNavigationButton()],
       ),
       body: Form(
         key: _formKey,
@@ -150,7 +155,8 @@ class _AddEditClientScreenState extends State<AddEditClientScreen> {
                 if (value == null || value.trim().isEmpty) {
                   return 'Please enter an email';
                 }
-                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                    .hasMatch(value)) {
                   return 'Please enter a valid email';
                 }
                 return null;

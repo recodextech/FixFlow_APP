@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/contractor_provider.dart';
 import '../services/preferences_service.dart';
+import '../widgets/home_navigation_button.dart';
 import 'contractor_profile_screen.dart';
 
 class CreateContractorScreen extends StatefulWidget {
@@ -16,7 +17,7 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  
+
   String _contractorType = 'COMPANY';
   bool _isSubmitting = false;
   Map<String, dynamic>? _result;
@@ -26,12 +27,31 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
       setState(() => _isSubmitting = true);
 
       try {
-        final result = await context.read<ContractorProvider>().createContractor(
-          contractorName: _nameController.text,
-          contractorType: _contractorType,
-          email: _emailController.text,
-          phoneNumber: _phoneController.text,
-        );
+        final contractorName = _nameController.text.trim();
+        final contractorEmail = _emailController.text.trim();
+        final contractorPhone = _phoneController.text.trim();
+
+        final result =
+            await context.read<ContractorProvider>().createContractor(
+                  contractorName: contractorName,
+                  contractorType: _contractorType,
+                  email: contractorEmail,
+                  phoneNumber: contractorPhone,
+                );
+
+        // Persist created contractor as the active profile without clearing worker data.
+        if (result['id'] != null) {
+          final prefs = PreferencesService();
+          final contractorId = result['id'].toString();
+          await prefs.setContractorId(contractorId);
+          await prefs.setContractorName(contractorName);
+
+          if (result['accountId'] != null) {
+            await prefs.setContractorAccountId(result['accountId'].toString());
+          }
+
+          await prefs.activateContractorProfile();
+        }
 
         setState(() {
           _result = result;
@@ -41,15 +61,6 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
           _emailController.clear();
           _phoneController.clear();
         });
-
-        // Save to preferences
-        if (result['id'] != null) {
-          await PreferencesService().setContractorId(result['id']);
-          await PreferencesService().setContractorName(_nameController.text);
-          if (result['accountId'] != null) {
-            await PreferencesService().setAccountId(result['accountId']);
-          }
-        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -90,6 +101,7 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: const [HomeNavigationButton()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -120,10 +132,9 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
                 ),
                 items: const [
                   DropdownMenuItem(value: 'COMPANY', child: Text('Company')),
-                  DropdownMenuItem(value: 'INDIVIDUAL', child: Text('Individual')),
-                ]
-                    .map((item) => item)
-                    .toList(),
+                  DropdownMenuItem(
+                      value: 'INDIVIDUAL', child: Text('Individual')),
+                ].map((item) => item).toList(),
                 onChanged: (value) {
                   if (value != null) {
                     setState(() => _contractorType = value);

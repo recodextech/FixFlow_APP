@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/preferences_service.dart';
+import '../widgets/home_navigation_button.dart';
 import 'create_worker_screen.dart';
 import 'create_contractor_screen.dart';
 import 'switch_account_screen.dart';
@@ -7,15 +8,25 @@ import 'switch_account_screen.dart';
 class SelectionScreen extends StatelessWidget {
   const SelectionScreen({super.key});
 
-  void _selectWorker(BuildContext context) {
-    PreferencesService().setSelectedType('WORKER');
+  Future<void> _selectWorker(BuildContext context) async {
+    await PreferencesService().setSelectedType('WORKER');
+
+    if (!context.mounted) {
+      return;
+    }
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const CreateWorkerScreen()),
     );
   }
 
-  void _selectContractor(BuildContext context) {
-    PreferencesService().setSelectedType('CONTRACTOR');
+  Future<void> _selectContractor(BuildContext context) async {
+    await PreferencesService().setSelectedType('CONTRACTOR');
+
+    if (!context.mounted) {
+      return;
+    }
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const CreateContractorScreen()),
     );
@@ -30,6 +41,13 @@ class SelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        actions: const [HomeNavigationButton()],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(

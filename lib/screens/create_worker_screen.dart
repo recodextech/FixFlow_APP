@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/worker.dart';
 import '../providers/worker_provider.dart';
 import '../services/preferences_service.dart';
+import '../widgets/home_navigation_button.dart';
 import 'worker_profile_screen.dart';
 
 class CreateWorkerScreen extends StatefulWidget {
@@ -17,7 +18,7 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  
+
   List<Category> _selectedCategories = [];
   bool _isSubmitting = false;
   Map<String, dynamic>? _result;
@@ -60,12 +61,30 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
       setState(() => _isSubmitting = true);
 
       try {
+        final workerName = _nameController.text.trim();
+        final workerEmail = _emailController.text.trim();
+        final workerPhone = _phoneController.text.trim();
+
         final result = await context.read<WorkerProvider>().createWorker(
-          workerName: _nameController.text,
-          email: _emailController.text,
-          phoneNumber: _phoneController.text,
-          workerCategories: _selectedCategories.map((c) => c.id).toList(),
-        );
+              workerName: workerName,
+              email: workerEmail,
+              phoneNumber: workerPhone,
+              workerCategories: _selectedCategories.map((c) => c.id).toList(),
+            );
+
+        // Persist created worker as the active profile without clearing contractor data.
+        if (result['id'] != null) {
+          final prefs = PreferencesService();
+          final workerId = result['id'].toString();
+          await prefs.setWorkerId(workerId);
+          await prefs.setWorkerName(workerName);
+
+          if (result['accountId'] != null) {
+            await prefs.setWorkerAccountId(result['accountId'].toString());
+          }
+
+          await prefs.activateWorkerProfile();
+        }
 
         setState(() {
           _result = result;
@@ -75,15 +94,6 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
           _emailController.clear();
           _phoneController.clear();
         });
-
-        // Save to preferences
-        if (result['id'] != null) {
-          await PreferencesService().setWorkerId(result['id']);
-          await PreferencesService().setWorkerName(_nameController.text);
-          if (result['accountId'] != null) {
-            await PreferencesService().setAccountId(result['accountId']);
-          }
-        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -124,6 +134,7 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: const [HomeNavigationButton()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -195,7 +206,8 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                     isExpanded: true,
                     hint: const Text('Select a category'),
                     items: provider.categories
-                        .where((cat) => !_selectedCategories.any((s) => s.id == cat.id))
+                        .where((cat) =>
+                            !_selectedCategories.any((s) => s.id == cat.id))
                         .map((category) {
                       return DropdownMenuItem(
                         value: category,
