@@ -1,12 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../models/availability.dart';
 import '../providers/worker_provider.dart';
 import '../services/preferences_service.dart';
-import '../widgets/home_navigation_button.dart';
 
 class CreateWorkerAvailabilityScreen extends StatefulWidget {
   final String workerId;
@@ -26,9 +27,10 @@ class _CreateWorkerAvailabilityScreenState
   static const LatLng _defaultColombo = LatLng(6.927079, 79.861244);
 
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
-  final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
 
   LatLng _selectedLocation = _defaultColombo;
+  String _selectedAddress = 'Colombo, Sri Lanka';
+  bool _isLoadingAddress = false;
   DateTime? _startDate;
   DateTime? _endDate;
   String _frequency = 'weekly';
@@ -36,6 +38,30 @@ class _CreateWorkerAvailabilityScreenState
   final List<_TimeWindowDraft> _timeWindows = [
     _TimeWindowDraft(duration: 1),
   ];
+
+  Future<void> _reverseGeocode(LatLng point) async {
+    setState(() => _isLoadingAddress = true);
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?lat=${point.latitude}&lon=${point.longitude}&format=json',
+      );
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'fixflow_app/1.0',
+      });
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final display = data['display_name'] as String?;
+        if (display != null && mounted) {
+          setState(() => _selectedAddress = display);
+        }
+      }
+    } catch (_) {
+      // Fallback – keep previous address
+    } finally {
+      if (mounted) setState(() => _isLoadingAddress = false);
+    }
+  }
 
   Future<void> _pickStartDate() async {
     final initialDate = _startDate ?? DateTime.now();
@@ -74,31 +100,16 @@ class _CreateWorkerAvailabilityScreenState
   }
 
   Future<void> _pickTimeWindowStart(int index) async {
-    final current = _timeWindows[index].startTime ?? DateTime.now();
-    final selectedDate = await showDatePicker(
-      context: context,
-      initialDate: current,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 3650)),
-    );
-
-    if (selectedDate == null || !mounted) return;
-
+    final current = _timeWindows[index].startTime ?? const TimeOfDay(hour: 9, minute: 0);
     final selectedTime = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(current),
+      initialTime: current,
     );
 
     if (selectedTime == null) return;
 
     setState(() {
-      _timeWindows[index].startTime = DateTime(
-        selectedDate.year,
-        selectedDate.month,
-        selectedDate.day,
-        selectedTime.hour,
-        selectedTime.minute,
-      );
+      _timeWindows[index].startTime = selectedTime;
     });
   }
 
@@ -141,6 +152,10 @@ class _CreateWorkerAvailabilityScreenState
     return null;
   }
 
+  DateTime _combineDateTime(DateTime date, TimeOfDay time) {
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
   Future<void> _submit() async {
     final validationError = _validateForm();
     if (validationError != null) {
@@ -170,7 +185,7 @@ class _CreateWorkerAvailabilityScreenState
       timeWindow: _timeWindows
           .map(
             (window) => AvailabilityTimeWindow(
-              startTime: window.startTime!,
+              startTime: _combineDateTime(_startDate!, window.startTime!),
               duration: window.duration,
             ),
           )
@@ -214,7 +229,13 @@ class _CreateWorkerAvailabilityScreenState
     return Scaffold(
       appBar: AppBar(
         title: const Text('Create Availability'),
-        actions: const [HomeNavigationButton()],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.home_outlined),
+            onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                context, '/home', (route) => false),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -238,6 +259,7 @@ class _CreateWorkerAvailabilityScreenState
                       setState(() {
                         _selectedLocation = point;
                       });
+                      _reverseGeocode(point);
                     },
                   ),
                   children: [
@@ -264,19 +286,33 @@ class _CreateWorkerAvailabilityScreenState
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Selected: ${_selectedLocation.latitude.toStringAsFixed(6)}, '
-              '${_selectedLocation.longitude.toStringAsFixed(6)}',
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.location_on, size: 18, color: Colors.red),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _isLoadingAddress
+                      ? const Text('Looking up address...',
+                          style: TextStyle(color: Colors.grey, fontSize: 13))
+                      : Text(
+                          _selectedAddress,
+                          style: const TextStyle(fontSize: 13),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             TextButton.icon(
               onPressed: () {
                 setState(() {
                   _selectedLocation = _defaultColombo;
+                  _selectedAddress = 'Colombo, Sri Lanka';
                 });
               },
-              icon: const Icon(Icons.my_location),
+              icon: const Icon(Icons.my_location, size: 18),
               label: const Text('Reset to Colombo'),
             ),
             const SizedBox(height: 16),
@@ -380,7 +416,7 @@ class _CreateWorkerAvailabilityScreenState
                         label: Text(
                           window.startTime == null
                               ? 'Select Start Time'
-                              : _dateTimeFormat.format(window.startTime!),
+                              : window.startTime!.format(context),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -435,7 +471,7 @@ class _CreateWorkerAvailabilityScreenState
 }
 
 class _TimeWindowDraft {
-  DateTime? startTime;
+  TimeOfDay? startTime;
   int duration;
 
   _TimeWindowDraft({

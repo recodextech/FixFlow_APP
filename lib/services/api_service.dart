@@ -9,8 +9,8 @@ import '../models/worker_job_suggestion.dart';
 
 class ApiService {
   // Base URLs - can be configured via environment
-  static const String _baseUrl = 'http://188.166.179.208:8888';
-  static const String _managementUrl = 'http://188.166.179.208:8090';
+  static const String _baseUrl = 'http://localhost:8888';
+  static const String _managementUrl = 'http://localhost:8090';
   // static const String _paymentEngineUrl = 'http://188.166.179.208:8070';
   static const String _paymentEngineUrl = 'http://localhost:8070';
   static const String _userId = 'flutter-client';
@@ -22,6 +22,35 @@ class ApiService {
   }
 
   ApiService._internal();
+
+  // Address cache for reverse geocoding
+  final Map<String, String> _addressCache = {};
+
+  Future<String> reverseGeocode(double latitude, double longitude) async {
+    final key = '${latitude.toStringAsFixed(6)},${longitude.toStringAsFixed(6)}';
+    if (_addressCache.containsKey(key)) return _addressCache[key]!;
+
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?lat=$latitude&lon=$longitude&format=json',
+      );
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'fixflow_app/1.0',
+      });
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final display = data['display_name'] as String?;
+        if (display != null) {
+          _addressCache[key] = display;
+          return display;
+        }
+      }
+    } catch (_) {
+      // Fallback to coordinates
+    }
+    return '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}';
+  }
 
   Map<String, String> _getHeaders({
     String? accountId,
@@ -599,6 +628,92 @@ class ApiService {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } catch (e) {
       print('Error creating contractor process: $e');
+      rethrow;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Payment Card API stubs (to be implemented when payment service is ready)
+  // ---------------------------------------------------------------------------
+
+  /// Get payment cards for an account
+  Future<List<Map<String, dynamic>>> getPaymentCards({
+    required String accountId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_paymentEngineUrl/accounts/$accountId/cards'),
+        headers: _getHeaders(accountId: accountId),
+      );
+
+      if (response.statusCode != 200) {
+        // Payment service may not be running yet – return empty list
+        return [];
+      }
+
+      final data = jsonDecode(response.body);
+      if (data is List) {
+        return data.cast<Map<String, dynamic>>();
+      } else if (data is Map<String, dynamic>) {
+        return (data['cards'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      }
+      return [];
+    } catch (e) {
+      // Payment service not available yet – return empty list gracefully
+      print('Payment cards not available: $e');
+      return [];
+    }
+  }
+
+  /// Add a payment card to an account
+  Future<Map<String, dynamic>> addPaymentCard({
+    required String accountId,
+    required String cardHolder,
+    required String cardNumber,
+    required String expiry,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_paymentEngineUrl/accounts/$accountId/cards'),
+        headers: _getHeaders(accountId: accountId),
+        body: jsonEncode({
+          'cardHolder': cardHolder,
+          'cardNumber': cardNumber,
+          'expiry': expiry,
+        }),
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(
+          'Failed to add payment card: ${response.statusCode} - ${response.body}',
+        );
+      }
+
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      print('Error adding payment card: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete a payment card
+  Future<void> deletePaymentCard({
+    required String accountId,
+    required String cardId,
+  }) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_paymentEngineUrl/accounts/$accountId/cards/$cardId'),
+        headers: _getHeaders(accountId: accountId),
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception(
+          'Failed to delete payment card: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error deleting payment card: $e');
       rethrow;
     }
   }

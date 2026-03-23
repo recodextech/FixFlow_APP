@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import '../theme.dart';
 import '../services/preferences_service.dart';
-import '../widgets/home_navigation_button.dart';
 import 'worker_profile_screen.dart';
 import 'contractor_profile_screen.dart';
-import 'switch_account_screen.dart';
+import 'create_worker_screen.dart';
+import 'create_contractor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -13,143 +14,216 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Future<void> _openWorkerProfile(String workerId) async {
-    final preferences = PreferencesService();
-    await preferences.activateWorkerProfile();
+  Future<void> _onWorkerTap() async {
+    final prefs = PreferencesService();
+    final workerId = prefs.getWorkerId();
+    final hasWorker = workerId != null && workerId.isNotEmpty;
 
-    if (!mounted) {
-      return;
+    await prefs.activateWorkerProfile();
+    if (!mounted) return;
+
+    if (hasWorker) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WorkerProfileScreen(workerId: workerId),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CreateWorkerScreen()),
+      );
     }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => WorkerProfileScreen(workerId: workerId),
-      ),
-    );
   }
 
-  Future<void> _openContractorProfile(String contractorId) async {
-    final preferences = PreferencesService();
-    await preferences.activateContractorProfile();
+  Future<void> _onContractorTap() async {
+    final prefs = PreferencesService();
+    final contractorId = prefs.getContractorId();
+    final hasContractor = contractorId != null && contractorId.isNotEmpty;
 
-    if (!mounted) {
-      return;
+    await prefs.activateContractorProfile();
+    if (!mounted) return;
+
+    if (hasContractor) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ContractorProfileScreen(contractorId: contractorId),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CreateContractorScreen()),
+      );
     }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            ContractorProfileScreen(contractorId: contractorId),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final prefs = PreferencesService();
-    final workerProfile = prefs.getWorkerId();
-    final contractorProfile = prefs.getContractorId();
+    final workerName = prefs.getWorkerName();
+    final contractorName = prefs.getContractorName();
+    final hasWorker =
+        prefs.getWorkerId() != null && prefs.getWorkerId()!.isNotEmpty;
+    final hasContractor =
+        prefs.getContractorId() != null && prefs.getContractorId()!.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('FixFlow - Worker & Contractor Manager'),
-        elevation: 0,
-        actions: const [HomeNavigationButton()],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: AppColors.loginGradient,
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Column(
+              children: [
+                const SizedBox(height: 16),
+                // App title
+                const Text(
+                  'FixFlow',
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Worker & Contractor Manager',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                const Text(
+                  'Who are you?',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // Worker Card
+                _RoleCard(
+                  icon: Icons.groups_rounded,
+                  title: 'I am a Worker',
+                  subtitle: hasWorker
+                      ? workerName ?? 'Worker profile'
+                      : 'Create or manage your worker profile',
+                  buttonLabel:
+                      hasWorker ? 'Continue as Worker' : 'Create Worker Profile',
+                  gradient: AppColors.workerGradient,
+                  onTap: _onWorkerTap,
+                ),
+                const SizedBox(height: 20),
+
+                // Contractor Card
+                _RoleCard(
+                  icon: Icons.apartment_rounded,
+                  title: 'I am a Contractor',
+                  subtitle: hasContractor
+                      ? contractorName ?? 'Contractor profile'
+                      : 'Create or manage your contractor profile',
+                  buttonLabel: hasContractor
+                      ? 'Continue as Contractor'
+                      : 'Create Contractor Profile',
+                  gradient: AppColors.contractorOrangeGradient,
+                  onTap: _onContractorTap,
+                ),
+                const SizedBox(height: 32),
+              ],
+            ),
+          ),
+        ),
       ),
-      body: SingleChildScrollView(
+    );
+  }
+}
+
+class _RoleCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String buttonLabel;
+  final List<Color> gradient;
+  final VoidCallback onTap;
+
+  const _RoleCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.buttonLabel,
+    required this.gradient,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradient,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: gradient.first.withValues(alpha: 0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
         child: Column(
           children: [
-            // Profile Info Section
-            if (workerProfile != null)
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: Colors.green.shade50,
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.green,
-                      child: const Icon(Icons.person, color: Colors.white),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Worker Profile',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                          Text(
-                            prefs.getWorkerName() ?? 'Unknown',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _openWorkerProfile(workerProfile),
-                      icon: const Icon(Icons.arrow_forward),
-                      label: const Text('View'),
-                    ),
-                  ],
-                ),
+            Icon(icon, size: 52, color: Colors.white),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
-            if (contractorProfile != null)
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: Colors.orange.shade50,
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.orange,
-                      child: const Icon(Icons.business, color: Colors.white),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Contractor Profile',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                          Text(
-                            prefs.getContractorName() ?? 'Unknown',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () =>
-                          _openContractorProfile(contractorProfile),
-                      icon: const Icon(Icons.arrow_forward),
-                      label: const Text('View'),
-                    ),
-                  ],
-                ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.white.withValues(alpha: 0.85),
               ),
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SwitchAccountScreen(),
-                    ),
-                  ),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Switch Account / Create New'),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(30),
+              ),
+              child: Text(
+                buttonLabel,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: gradient.first,
                 ),
               ),
             ),

@@ -10,8 +10,7 @@ import '../models/worker_job_suggestion.dart';
 import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
 import '../services/preferences_service.dart';
-import '../widgets/home_navigation_button.dart';
-import 'switch_account_screen.dart';
+import '../theme.dart';
 import 'worker_details_screen.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
@@ -26,9 +25,11 @@ class WorkerProfileScreen extends StatefulWidget {
   State<WorkerProfileScreen> createState() => _WorkerProfileScreenState();
 }
 
-class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
+class _WorkerProfileScreenState extends State<WorkerProfileScreen>
+    with SingleTickerProviderStateMixin {
   final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
   final Distance _distance = const Distance();
+  late TabController _tabController;
 
   late Future<Worker?> _workerFuture;
   late Future<List<WorkerAssignedJob>> _pendingJobsFuture;
@@ -42,7 +43,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadProfileData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   void _loadProfileData() {
@@ -433,58 +441,18 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   }
 
   void _openWorkerDetails() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => WorkerDetailsScreen(workerId: widget.workerId),
-      ),
-    );
-  }
-
-  void _switchProfile() {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Switch Profile'),
-        content: const Text('Open switch account to login as another user?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => WorkerDetailsScreen(workerId: widget.workerId),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const SwitchAccountScreen(),
-                ),
-              );
-            },
-            child: const Text('Switch Account',
-                style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+        )
+        .then((_) => setState(_loadProfileData));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Worker Profile'),
-        actions: [
-          const HomeNavigationButton(),
-          PopupMenuButton(
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                onTap: _switchProfile,
-                child: const Text('Switch Profile'),
-              ),
-            ],
-          ),
-        ],
-      ),
       body: FutureBuilder<Worker?>(
         future: _workerFuture,
         builder: (context, snapshot) {
@@ -497,14 +465,13 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  Icon(Icons.error_outline, size: 48, color: AppColors.red),
                   const SizedBox(height: 16),
-                  Text('Error: ${snapshot.error}'),
+                  Text('Error: ${snapshot.error}',
+                      style: const TextStyle(color: AppColors.text2)),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () {
-                      setState(_loadProfileData);
-                    },
+                    onPressed: () => setState(_loadProfileData),
                     child: const Text('Retry'),
                   ),
                 ],
@@ -513,21 +480,18 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           }
 
           final worker = snapshot.data;
-
           if (worker == null) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.person_outline,
-                      size: 64, color: Colors.grey),
+                  Icon(Icons.person_outline, size: 48, color: AppColors.gray5),
                   const SizedBox(height: 16),
                   const Text('Worker profile not found'),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () {
-                      navigateToHomeScreen(context);
-                    },
+                    onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                        context, '/home', (_) => false),
                     child: const Text('Go to Home'),
                   ),
                 ],
@@ -535,183 +499,42 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
             );
           }
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FutureBuilder<List<WorkerAssignedJob>>(
-                  future: _pendingJobsFuture,
-                  builder: (context, pendingStatusSnapshot) {
-                    final status = _resolveWorkerOverallStatus(
-                      pendingStatusSnapshot,
-                    );
-                    return _buildProfileHeader(worker, status);
-                  },
+          return NestedScrollView(
+            headerSliverBuilder: (context, innerBoxIsScrolled) {
+              return [
+                SliverToBoxAdapter(
+                  child: FutureBuilder<List<WorkerAssignedJob>>(
+                    future: _pendingJobsFuture,
+                    builder: (context, pendingSnap) {
+                      final status =
+                          _resolveWorkerOverallStatus(pendingSnap);
+                      return _buildGradientHeader(worker, status);
+                    },
+                  ),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _openWorkerDetails,
-                    icon: const Icon(Icons.badge_outlined),
-                    label: const Text('View Worker Details & Availability'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TabBarDelegate(
+                    tabBar: TabBar(
+                      controller: _tabController,
+                      labelColor: AppColors.green,
+                      unselectedLabelColor: AppColors.gray5,
+                      indicatorColor: AppColors.green,
+                      indicatorWeight: 3,
+                      tabs: const [
+                        Tab(text: 'Suggested Jobs'),
+                        Tab(text: 'My Jobs'),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Pending Jobs',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _refreshPendingJobs,
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
-                ),
-                FutureBuilder<List<WorkerAssignedJob>>(
-                  future: _pendingJobsFuture,
-                  builder: (context, pendingSnapshot) {
-                    if (pendingSnapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-
-                    if (pendingSnapshot.hasError) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Error loading pending jobs: ${pendingSnapshot.error}',
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                          TextButton(
-                            onPressed: _refreshPendingJobs,
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      );
-                    }
-
-                    final pendingJobs = (pendingSnapshot.data ?? [])
-                        .where(_isPendingAssignedJob)
-                        .toList();
-
-                    if (pendingJobs.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.only(top: 8),
-                        child: Text(
-                          'No pending jobs available',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      );
-                    }
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Total: ${pendingJobs.length}',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                        const SizedBox(height: 8),
-                        ...pendingJobs.asMap().entries.map((entry) {
-                          return _buildPendingJobCard(
-                            entry.value,
-                            entry.key + 1,
-                          );
-                        }),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Suggested Jobs',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _refreshJobSuggestions,
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
-                ),
-                FutureBuilder<WorkerJobSuggestionResponse>(
-                  future: _jobSuggestionsFuture,
-                  builder: (context, suggestionSnapshot) {
-                    if (suggestionSnapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-
-                    if (suggestionSnapshot.hasError) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Error loading suggestions: ${suggestionSnapshot.error}',
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                          TextButton(
-                            onPressed: _refreshJobSuggestions,
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      );
-                    }
-
-                    final suggestions =
-                        suggestionSnapshot.data?.availableJobs ?? [];
-
-                    if (suggestions.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.only(top: 8),
-                        child: Text(
-                          'No suggested jobs available',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      );
-                    }
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Total: ${suggestions.length}',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                        const SizedBox(height: 8),
-                        ...suggestions.asMap().entries.map((entry) {
-                          return _buildSuggestedJobCard(
-                            entry.value,
-                            entry.key + 1,
-                          );
-                        }),
-                      ],
-                    );
-                  },
-                ),
+              ];
+            },
+            body: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildSuggestedJobsTab(),
+                _buildPendingJobsTab(),
               ],
             ),
           );
@@ -720,75 +543,227 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     );
   }
 
-  Widget _buildProfileHeader(Worker worker, String status) {
+  Widget _buildGradientHeader(Worker worker, String status) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.green.shade400, Colors.green.shade600],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: AppColors.workerGradient,
         ),
-        borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundColor: Colors.white,
-            child: Text(
-              _workerInitial(worker.workerName),
-              style: const TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(
+            children: [
+              // Top bar
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(Icons.arrow_back, color: Colors.white),
+                  ),
+                  const Spacer(),
+                  const Text(
+                    'Worker Dashboard',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: _openWorkerDetails,
+                    child: const Icon(Icons.edit_outlined, color: Colors.white),
+                  ),
+                ],
               ),
-            ),
+              const SizedBox(height: 20),
+              // Profile info
+              Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _workerInitial(worker.workerName),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          worker.workerName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            _StatusBadge(status: status),
+                            const SizedBox(width: 8),
+                            if (worker.categories.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  worker.categories.first,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  worker.workerName,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'ID: ${worker.id}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  children: [
-                    const Text(
-                      'Status',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Chip(
-                      label: Text(status),
-                      backgroundColor: _getWorkerStatusBackgroundColor(status),
-                      labelStyle: TextStyle(
-                        color: _getWorkerStatusTextColor(status),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestedJobsTab() {
+    return FutureBuilder<WorkerJobSuggestionResponse>(
+      future: _jobSuggestionsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return _buildErrorState(
+            'Could not load suggestions',
+            _refreshJobSuggestions,
+          );
+        }
+
+        final suggestions = snapshot.data?.availableJobs ?? [];
+        if (suggestions.isEmpty) {
+          return _buildEmptyState(
+            'No suggested jobs',
+            'Job suggestions will appear here when available.',
+            Icons.search_off_rounded,
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async => _refreshJobSuggestions(),
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: suggestions.length,
+            itemBuilder: (context, index) =>
+                _buildSuggestedJobCard(suggestions[index], index + 1),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPendingJobsTab() {
+    return FutureBuilder<List<WorkerAssignedJob>>(
+      future: _pendingJobsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return _buildErrorState(
+            'Could not load pending jobs',
+            _refreshPendingJobs,
+          );
+        }
+
+        final pendingJobs =
+            (snapshot.data ?? []).where(_isPendingAssignedJob).toList();
+
+        if (pendingJobs.isEmpty) {
+          return _buildEmptyState(
+            'No pending jobs',
+            'Accept a suggested job to see it here.',
+            Icons.assignment_outlined,
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async => _refreshPendingJobs(),
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: pendingJobs.length,
+            itemBuilder: (context, index) =>
+                _buildPendingJobCard(pendingJobs[index], index + 1),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState(String title, String subtitle, IconData icon) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 48, color: AppColors.gray4),
+            const SizedBox(height: 16),
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text)),
+            const SizedBox(height: 6),
+            Text(subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: AppColors.text2)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message, VoidCallback onRetry) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 48, color: AppColors.orange),
+          const SizedBox(height: 12),
+          Text(message, style: const TextStyle(color: AppColors.text2)),
+          const SizedBox(height: 12),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
           ),
         ],
       ),
@@ -797,92 +772,63 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
 
   Widget _buildPendingJobCard(WorkerAssignedJob job, int index) {
     final status = _resolvePendingJobStatus(job);
-
     _loadContractorContactIfNeeded(job.contractorId);
-
     final contractor = _contractorCache[job.contractorId];
     final isContractorLoading =
         _loadingContractorIds.contains(job.contractorId);
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.gray2),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Text(
-                  'Pending Job $index',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.greenPale,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.assignment, size: 18, color: AppColors.green),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Job #$index',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                Chip(
-                  label: Text(status),
-                  backgroundColor: _getStatusBackgroundColor(status),
-                  labelStyle: TextStyle(
-                    color: _getStatusTextColor(status),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                _JobStatusChip(status: status),
               ],
             ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Assigned Status',
-              job.assignedJobStatus.isEmpty
-                  ? 'N/A'
-                  : job.assignedJobStatus.toUpperCase(),
-              Icons.assignment_turned_in,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Job Status',
-              job.jobStatus.isEmpty ? 'N/A' : job.jobStatus.toUpperCase(),
-              Icons.info_outline,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Contractor',
-              job.contractorName.isEmpty ? 'N/A' : job.contractorName,
-              Icons.business,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Contractor Phone',
-              isContractorLoading
-                  ? 'Loading...'
-                  : _resolveContractorPhone(contractor),
-              Icons.phone,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Start Time',
-              _formatAssignedJobStartTime(job),
-              Icons.schedule,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Duration',
-              '${job.duration}h',
-              Icons.timer,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Location',
-              '${job.latitude.toStringAsFixed(6)}, '
-                  '${job.longitude.toStringAsFixed(6)}',
-              Icons.location_on,
-            ),
             const SizedBox(height: 12),
-            _buildPendingJobActionButtons(
-              job: job,
-              status: status,
-            ),
+            _buildDetailRow(Icons.business, 'Contractor',
+                job.contractorName.isEmpty ? 'N/A' : job.contractorName),
+            _buildDetailRow(
+                Icons.phone,
+                'Phone',
+                isContractorLoading
+                    ? 'Loading...'
+                    : _resolveContractorPhone(contractor)),
+            _buildDetailRow(
+                Icons.schedule, 'Start', _formatAssignedJobStartTime(job)),
+            _buildDetailRow(Icons.timer, 'Duration', '${job.duration}h'),
+            _buildAddressRow(Icons.location_on, 'Location', job.latitude, job.longitude),
+            const SizedBox(height: 10),
+            _buildPendingJobActionButtons(job: job, status: status),
           ],
         ),
       ),
@@ -895,46 +841,34 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   }) {
     final jobId = job.jobId;
     final isInProgress = _jobActionInProgress.contains(jobId);
-
     final canStart = status == 'ACCEPTED';
     final canSuccess = status == 'STARTED' || status == 'IN_PROGRESS';
     final isCompleted = status == 'SUCCESS' || status == 'COMPLETED';
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    if (isCompleted) {
+      return _CompletedBadge();
+    }
+
+    return Row(
       children: [
         if (canStart)
-          ElevatedButton.icon(
-            onPressed: isInProgress ? null : () => _startPendingJob(job),
-            icon: isInProgress
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.play_arrow),
-            label: const Text('Start Job'),
+          Expanded(
+            child: _ActionButton(
+              label: 'Start Job',
+              icon: Icons.play_arrow_rounded,
+              color: AppColors.blue,
+              isLoading: isInProgress,
+              onPressed: () => _startPendingJob(job),
+            ),
           ),
         if (canSuccess)
-          ElevatedButton.icon(
-            onPressed: isInProgress ? null : () => _completePendingJob(job),
-            icon: isInProgress
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.task_alt),
-            label: const Text('Success Job'),
-          ),
-        if (isCompleted)
-          Chip(
-            label: const Text('Completed'),
-            backgroundColor: Colors.green.shade100,
-            labelStyle: TextStyle(
-              color: Colors.green.shade800,
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: _ActionButton(
+              label: 'Complete',
+              icon: Icons.task_alt_rounded,
+              color: AppColors.green,
+              isLoading: isInProgress,
+              onPressed: () => _completePendingJob(job),
             ),
           ),
       ],
@@ -955,117 +889,80 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     final isContractorLoading =
         _loadingContractorIds.contains(job.contractorId);
 
-    final workerPoint = LatLng(
-      workerInfo.workerLatitude,
-      workerInfo.workerLongitude,
-    );
-    final jobPoint = LatLng(
-      job.jobLatitude,
-      job.jobLongitude,
-    );
-    final distanceKm =
-        _distance.as(LengthUnit.Kilometer, workerPoint, jobPoint);
+    final workerPoint = LatLng(workerInfo.workerLatitude, workerInfo.workerLongitude);
+    final jobPoint = LatLng(job.jobLatitude, job.jobLongitude);
+    final distanceKm = _distance.as(LengthUnit.Kilometer, workerPoint, jobPoint);
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.gray2),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Text(
-                  'Suggested Job $index',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.orangePale,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.lightbulb_outline, size: 18, color: AppColors.orange),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        job.jobCategory.isEmpty ? 'Job #$index' : job.jobCategory,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.text,
+                        ),
+                      ),
+                      Text(
+                        job.contractorCompany.isEmpty ? 'Unknown' : job.contractorCompany,
+                        style: const TextStyle(fontSize: 12, color: AppColors.text2),
+                      ),
+                    ],
                   ),
                 ),
-                const Spacer(),
-                Chip(
-                  label: Text(status),
-                  backgroundColor: _getStatusBackgroundColor(status),
-                  labelStyle: TextStyle(
-                    color: _getStatusTextColor(status),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                _JobStatusChip(status: status),
               ],
             ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Category',
-              job.jobCategory.isEmpty ? 'N/A' : job.jobCategory,
-              Icons.category,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Contractor',
-              job.contractorCompany.isEmpty ? 'N/A' : job.contractorCompany,
-              Icons.business,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Start Time',
-              _formatSuggestedJobStartTime(job),
-              Icons.schedule,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Duration',
-              '${job.jobDurationHours}h',
-              Icons.timer,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Location',
-              '${job.jobLatitude.toStringAsFixed(6)}, '
-                  '${job.jobLongitude.toStringAsFixed(6)}',
-              Icons.location_on,
-            ),
-            const SizedBox(height: 8),
-            _buildInfoRow(
-              'Direction Distance',
-              '${distanceKm.toStringAsFixed(2)} km',
-              Icons.alt_route,
-            ),
+            const SizedBox(height: 12),
+            _buildDetailRow(Icons.schedule, 'Start', _formatSuggestedJobStartTime(job)),
+            _buildDetailRow(Icons.timer, 'Duration', '${job.jobDurationHours}h'),
+            _buildDetailRow(Icons.alt_route, 'Distance', '${distanceKm.toStringAsFixed(1)} km'),
+            _buildAddressRow(Icons.location_on, 'Location', job.jobLatitude, job.jobLongitude),
             if (showContractorAndDirection) ...[
-              const SizedBox(height: 8),
-              _buildInfoRow(
-                'Contractor Phone',
-                isContractorLoading
-                    ? 'Loading...'
-                    : _resolveContractorPhone(contractor),
-                Icons.phone,
-              ),
+              _buildDetailRow(Icons.phone, 'Phone',
+                  isContractorLoading ? 'Loading...' : _resolveContractorPhone(contractor)),
               const SizedBox(height: 10),
-              const Text(
-                'Location Direction',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
               SizedBox(
-                height: 180,
+                height: 150,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   child: _buildDirectionMap(workerPoint, jobPoint),
                 ),
               ),
               const SizedBox(height: 4),
               const Text(
-                'Green marker: worker • Red marker: job',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
+                'Green: your location • Red: job site',
+                style: TextStyle(fontSize: 11, color: AppColors.text3),
               ),
             ],
-            const SizedBox(height: 12),
-            _buildJobActionButtons(
-              suggestion: suggestion,
-              status: status,
-            ),
+            const SizedBox(height: 10),
+            _buildJobActionButtons(suggestion: suggestion, status: status),
           ],
         ),
       ),
@@ -1078,65 +975,99 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   }) {
     final jobId = suggestion.jobInformation.jobId;
     final isInProgress = _jobActionInProgress.contains(jobId);
-
     final canAccept = status == 'PENDING';
     final canStart = status == 'ACCEPTED';
     final canSuccess = status == 'STARTED' || status == 'IN_PROGRESS';
     final isCompleted = status == 'SUCCESS' || status == 'COMPLETED';
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    if (isCompleted) {
+      return _CompletedBadge();
+    }
+
+    return Row(
       children: [
         if (canAccept)
-          ElevatedButton.icon(
-            onPressed:
-                isInProgress ? null : () => _acceptSuggestedJob(suggestion),
-            icon: isInProgress
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.check_circle),
-            label: const Text('Accept Job'),
+          Expanded(
+            child: _ActionButton(
+              label: 'Accept',
+              icon: Icons.check_circle_outline,
+              color: AppColors.green,
+              isLoading: isInProgress,
+              onPressed: () => _acceptSuggestedJob(suggestion),
+            ),
           ),
         if (canStart)
-          ElevatedButton.icon(
-            onPressed:
-                isInProgress ? null : () => _startAcceptedJob(suggestion),
-            icon: isInProgress
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.play_arrow),
-            label: const Text('Start Job'),
+          Expanded(
+            child: _ActionButton(
+              label: 'Start',
+              icon: Icons.play_arrow_rounded,
+              color: AppColors.blue,
+              isLoading: isInProgress,
+              onPressed: () => _startAcceptedJob(suggestion),
+            ),
           ),
         if (canSuccess)
-          ElevatedButton.icon(
-            onPressed:
-                isInProgress ? null : () => _completeStartedJob(suggestion),
-            icon: isInProgress
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.task_alt),
-            label: const Text('Success Job'),
-          ),
-        if (isCompleted)
-          Chip(
-            label: const Text('Completed'),
-            backgroundColor: Colors.green.shade100,
-            labelStyle: TextStyle(
-              color: Colors.green.shade800,
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: _ActionButton(
+              label: 'Complete',
+              icon: Icons.task_alt_rounded,
+              color: AppColors.green,
+              isLoading: isInProgress,
+              onPressed: () => _completeStartedJob(suggestion),
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.gray5),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: const TextStyle(
+                fontSize: 13, color: AppColors.text2, fontWeight: FontWeight.w500),
+          ),
+          Expanded(
+            child: Text(value,
+                style: const TextStyle(fontSize: 13, color: AppColors.text)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddressRow(IconData icon, String label, double lat, double lng) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.gray5),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: const TextStyle(
+                fontSize: 13, color: AppColors.text2, fontWeight: FontWeight.w500),
+          ),
+          Expanded(
+            child: FutureBuilder<String>(
+              future: ApiService().reverseGeocode(lat, lng),
+              builder: (context, snap) {
+                return Text(
+                  snap.data ?? 'Loading...',
+                  style: const TextStyle(fontSize: 13, color: AppColors.text),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1147,10 +1078,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
     );
 
     return FlutterMap(
-      options: MapOptions(
-        initialCenter: center,
-        initialZoom: 13,
-      ),
+      options: MapOptions(initialCenter: center, initialZoom: 13),
       children: [
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -1160,8 +1088,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
           polylines: [
             Polyline(
               points: [workerPoint, jobPoint],
-              color: Colors.blue.shade600,
-              strokeWidth: 4,
+              color: AppColors.blue,
+              strokeWidth: 3,
             ),
           ],
         ),
@@ -1171,38 +1099,15 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
               point: workerPoint,
               width: 36,
               height: 36,
-              child: const Icon(
-                Icons.person_pin_circle,
-                color: Colors.green,
-                size: 36,
-              ),
+              child: const Icon(Icons.person_pin_circle, color: Colors.green, size: 36),
             ),
             Marker(
               point: jobPoint,
               width: 36,
               height: 36,
-              child: const Icon(
-                Icons.location_pin,
-                color: Colors.red,
-                size: 36,
-              ),
+              child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
             ),
           ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: Colors.green.shade600),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            '$label: $value',
-            style: const TextStyle(fontSize: 14),
-          ),
         ),
       ],
     );
@@ -1353,75 +1258,232 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
   Color _getStatusBackgroundColor(String status) {
     switch (status) {
       case 'PENDING':
-        return Colors.orange.shade100;
+        return AppColors.orangePale;
       case 'ACCEPTED':
-        return Colors.blue.shade100;
+        return AppColors.bluePale;
       case 'STARTED':
       case 'IN_PROGRESS':
-        return Colors.indigo.shade100;
+        return const Color(0xFFE8EAF6);
       case 'SUCCESS':
       case 'COMPLETED':
-        return Colors.green.shade100;
+        return AppColors.greenPale;
       default:
-        return Colors.grey.shade300;
+        return AppColors.gray1;
     }
   }
 
   Color _getStatusTextColor(String status) {
     switch (status) {
       case 'PENDING':
-        return Colors.orange.shade800;
+        return AppColors.orange;
       case 'ACCEPTED':
-        return Colors.blue.shade800;
+        return AppColors.blue;
       case 'STARTED':
       case 'IN_PROGRESS':
-        return Colors.indigo.shade800;
+        return const Color(0xFF283593);
       case 'SUCCESS':
       case 'COMPLETED':
-        return Colors.green.shade800;
+        return AppColors.green;
       default:
-        return Colors.black87;
+        return AppColors.gray6;
     }
   }
 
   Color _getWorkerStatusBackgroundColor(String status) {
     switch (status) {
       case 'BUSY':
-        return Colors.indigo.shade100;
+        return const Color(0xFFE8EAF6);
       case 'ASSIGNED':
-        return Colors.blue.shade100;
+        return AppColors.bluePale;
       case 'IDLE':
-        return Colors.green.shade100;
-      case 'LOADING':
-      case 'UNKNOWN':
-        return Colors.grey.shade300;
+        return AppColors.greenPale;
       default:
-        return Colors.grey.shade300;
+        return AppColors.gray1;
     }
   }
 
   Color _getWorkerStatusTextColor(String status) {
     switch (status) {
       case 'BUSY':
-        return Colors.indigo.shade800;
+        return const Color(0xFF283593);
       case 'ASSIGNED':
-        return Colors.blue.shade800;
+        return AppColors.blue;
       case 'IDLE':
-        return Colors.green.shade800;
-      case 'LOADING':
-      case 'UNKNOWN':
-        return Colors.black87;
+        return AppColors.green;
       default:
-        return Colors.black87;
+        return AppColors.gray6;
     }
   }
 
   String _workerInitial(String workerName) {
     final trimmed = workerName.trim();
-    if (trimmed.isEmpty) {
-      return 'W';
-    }
-
+    if (trimmed.isEmpty) return 'W';
     return trimmed[0].toUpperCase();
+  }
+}
+
+// --- Helper Widgets ---
+
+class _TabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+  const _TabBarDelegate({required this.tabBar});
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(color: Colors.white, child: tabBar);
+  }
+
+  @override
+  bool shouldRebuild(covariant _TabBarDelegate oldDelegate) => false;
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String status;
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+class _JobStatusChip extends StatelessWidget {
+  final String status;
+  const _JobStatusChip({required this.status});
+
+  Color get _bg {
+    switch (status) {
+      case 'PENDING':
+        return AppColors.orangePale;
+      case 'ACCEPTED':
+        return AppColors.bluePale;
+      case 'STARTED':
+      case 'IN_PROGRESS':
+        return const Color(0xFFE8EAF6);
+      case 'SUCCESS':
+      case 'COMPLETED':
+        return AppColors.greenPale;
+      default:
+        return AppColors.gray1;
+    }
+  }
+
+  Color get _fg {
+    switch (status) {
+      case 'PENDING':
+        return AppColors.orange;
+      case 'ACCEPTED':
+        return AppColors.blue;
+      case 'STARTED':
+      case 'IN_PROGRESS':
+        return const Color(0xFF283593);
+      case 'SUCCESS':
+      case 'COMPLETED':
+        return AppColors.green;
+      default:
+        return AppColors.gray6;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: _bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _fg),
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool isLoading;
+  final VoidCallback onPressed;
+
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.isLoading,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ElevatedButton.icon(
+        onPressed: isLoading ? null : onPressed,
+        icon: isLoading
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              )
+            : Icon(icon, size: 18),
+        label: Text(label, style: const TextStyle(fontSize: 13)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletedBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.greenPale,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle, size: 16, color: AppColors.green),
+          const SizedBox(width: 6),
+          Text(
+            'Completed',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.green,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
