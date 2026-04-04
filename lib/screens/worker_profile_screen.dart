@@ -12,6 +12,7 @@ import '../services/api_service.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
 import 'worker_details_screen.dart';
+import 'worker_widgets.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   final String workerId;
@@ -514,7 +515,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                 ),
                 SliverPersistentHeader(
                   pinned: true,
-                  delegate: _TabBarDelegate(
+                  delegate: WorkerTabBarDelegate(
                     tabBar: TabBar(
                       controller: _tabController,
                       labelColor: AppColors.green,
@@ -619,7 +620,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            _StatusBadge(status: status),
+                            StatusBadge(status: status),
                             const SizedBox(width: 8),
                             if (worker.categories.isNotEmpty)
                               Container(
@@ -811,7 +812,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                     ),
                   ),
                 ),
-                _JobStatusChip(status: status),
+                JobStatusChip(status: status),
               ],
             ),
             const SizedBox(height: 12),
@@ -846,14 +847,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final isCompleted = status == 'SUCCESS' || status == 'COMPLETED';
 
     if (isCompleted) {
-      return _CompletedBadge();
+      return CompletedBadge();
     }
 
     return Row(
       children: [
         if (canStart)
           Expanded(
-            child: _ActionButton(
+            child: ActionButton(
               label: 'Start Job',
               icon: Icons.play_arrow_rounded,
               color: AppColors.blue,
@@ -863,7 +864,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           ),
         if (canSuccess)
           Expanded(
-            child: _ActionButton(
+            child: ActionButton(
               label: 'Complete',
               icon: Icons.task_alt_rounded,
               color: AppColors.green,
@@ -936,7 +937,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                     ],
                   ),
                 ),
-                _JobStatusChip(status: status),
+                JobStatusChip(status: status),
               ],
             ),
             const SizedBox(height: 12),
@@ -981,14 +982,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final isCompleted = status == 'SUCCESS' || status == 'COMPLETED';
 
     if (isCompleted) {
-      return _CompletedBadge();
+      return CompletedBadge();
     }
 
     return Row(
       children: [
         if (canAccept)
           Expanded(
-            child: _ActionButton(
+            child: ActionButton(
               label: 'Accept',
               icon: Icons.check_circle_outline,
               color: AppColors.green,
@@ -998,7 +999,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           ),
         if (canStart)
           Expanded(
-            child: _ActionButton(
+            child: ActionButton(
               label: 'Start',
               icon: Icons.play_arrow_rounded,
               color: AppColors.blue,
@@ -1008,7 +1009,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           ),
         if (canSuccess)
           Expanded(
-            child: _ActionButton(
+            child: ActionButton(
               label: 'Complete',
               icon: Icons.task_alt_rounded,
               color: AppColors.green,
@@ -1322,168 +1323,4 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   }
 }
 
-// --- Helper Widgets ---
 
-class _TabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
-  const _TabBarDelegate({required this.tabBar});
-
-  @override
-  double get minExtent => tabBar.preferredSize.height;
-  @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(color: Colors.white, child: tabBar);
-  }
-
-  @override
-  bool shouldRebuild(covariant _TabBarDelegate oldDelegate) => false;
-}
-
-class _StatusBadge extends StatelessWidget {
-  final String status;
-  const _StatusBadge({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.25),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
-
-class _JobStatusChip extends StatelessWidget {
-  final String status;
-  const _JobStatusChip({required this.status});
-
-  Color get _bg {
-    switch (status) {
-      case 'PENDING':
-        return AppColors.orangePale;
-      case 'ACCEPTED':
-        return AppColors.bluePale;
-      case 'STARTED':
-      case 'IN_PROGRESS':
-        return const Color(0xFFE8EAF6);
-      case 'SUCCESS':
-      case 'COMPLETED':
-        return AppColors.greenPale;
-      default:
-        return AppColors.gray1;
-    }
-  }
-
-  Color get _fg {
-    switch (status) {
-      case 'PENDING':
-        return AppColors.orange;
-      case 'ACCEPTED':
-        return AppColors.blue;
-      case 'STARTED':
-      case 'IN_PROGRESS':
-        return const Color(0xFF283593);
-      case 'SUCCESS':
-      case 'COMPLETED':
-        return AppColors.green;
-      default:
-        return AppColors.gray6;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: _bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _fg),
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final bool isLoading;
-  final VoidCallback onPressed;
-
-  const _ActionButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.isLoading,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: ElevatedButton.icon(
-        onPressed: isLoading ? null : onPressed,
-        icon: isLoading
-            ? SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2, color: color),
-              )
-            : Icon(icon, size: 18),
-        label: Text(label, style: const TextStyle(fontSize: 13)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-        ),
-      ),
-    );
-  }
-}
-
-class _CompletedBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.greenPale,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle, size: 16, color: AppColors.green),
-          const SizedBox(width: 6),
-          Text(
-            'Completed',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.green,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

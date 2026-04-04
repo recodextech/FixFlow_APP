@@ -6,13 +6,16 @@ import '../models/contractor.dart';
 import '../models/process.dart';
 import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
+import 'auth_service.dart';
 
 class ApiService {
-  // Base URLs - can be configured via environment
-  static const String _baseUrl = 'http://localhost:8888';
-  static const String _managementUrl = 'http://localhost:8090';
-  // static const String _paymentEngineUrl = 'http://188.166.179.208:8070';
-  static const String _paymentEngineUrl = 'http://localhost:8070';
+  // All API calls route through KrakenD gateway
+  static const String _gatewayUrl = 'http://localhost:8081';
+
+  // Gateway path prefixes for each backend service
+  static const String _managementPath = '/api/v1/management';
+  static const String _matchingPath = '/api/v1/matching';
+  static const String _paymentPath = '/api/v1/payments';
   static const String _userId = 'flutter-client';
 
   static final ApiService _instance = ApiService._internal();
@@ -52,16 +55,18 @@ class ApiService {
     return '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}';
   }
 
-  Map<String, String> _getHeaders({
+  Future<Map<String, String>> _getHeaders({
     String? accountId,
     String? traceId,
     String? userId,
-  }) {
+  }) async {
+    final token = await AuthService().getAccessToken();
     return {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
       'user-id':
           userId != null && userId.isNotEmpty ? userId : _userId,
-      'Accept': 'application/json',
       if (accountId != null) 'account-id': accountId,
       if (traceId != null) 'trace-id': traceId,
     };
@@ -75,8 +80,8 @@ class ApiService {
   Future<List<Category>> getCategories({String? accountId}) async {
     try {
       final response = await http.get(
-        Uri.parse('$_managementUrl/categories'),
-        headers: _getHeaders(accountId: accountId),
+        Uri.parse('$_gatewayUrl$_managementPath/categories'),
+        headers: await _getHeaders(accountId: accountId),
       );
 
       if (response.statusCode != 200) {
@@ -107,8 +112,8 @@ class ApiService {
       };
 
       final response = await http.post(
-        Uri.parse('$_managementUrl/workers'),
-        headers: _getHeaders(),
+        Uri.parse('$_gatewayUrl$_managementPath/workers'),
+        headers: await _getHeaders(),
         body: jsonEncode(payload),
       );
 
@@ -131,8 +136,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$_managementUrl/worker/$workerId/availability'),
-        headers: _getHeaders(
+        Uri.parse('$_gatewayUrl$_managementPath/worker/$workerId/availability'),
+        headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
         ),
@@ -169,8 +174,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_managementUrl/worker/$workerId/availability'),
-        headers: _getHeaders(
+        Uri.parse('$_gatewayUrl$_managementPath/worker/$workerId/availability'),
+        headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
         ),
@@ -215,8 +220,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/jobs/worker/$workerId/suggestions'),
-        headers: _getHeaders(
+        Uri.parse('$_gatewayUrl$_matchingPath/jobs/worker/$workerId/suggestions'),
+        headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
           userId: workerId,
@@ -263,8 +268,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl/jobs/worker/$workerId/assigned'),
-        headers: _getHeaders(
+        Uri.parse('$_gatewayUrl$_matchingPath/jobs/worker/$workerId/assigned'),
+        headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
           userId: workerId,
@@ -357,8 +362,8 @@ class ApiService {
     required String action,
   }) async {
     final response = await http.patch(
-      Uri.parse('$_managementUrl/worker/$workerId/job/$jobId/$action'),
-      headers: _getHeaders(
+      Uri.parse('$_gatewayUrl$_managementPath/worker/$workerId/job/$jobId/$action'),
+      headers: await _getHeaders(
         accountId: accountId,
         traceId: _buildTraceId(),
         userId: workerId,
@@ -391,8 +396,8 @@ class ApiService {
       };
 
       final response = await http.post(
-        Uri.parse('$_managementUrl/contractors'),
-        headers: _getHeaders(),
+        Uri.parse('$_gatewayUrl$_managementPath/contractors'),
+        headers: await _getHeaders(),
         body: jsonEncode(payload),
       );
 
@@ -425,8 +430,8 @@ class ApiService {
       };
 
       final response = await http.patch(
-        Uri.parse('$_managementUrl/contractors/$contractorId'),
-        headers: _getHeaders(
+        Uri.parse('$_gatewayUrl$_managementPath/contractors/$contractorId'),
+        headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
           userId: contractorId,
@@ -475,8 +480,8 @@ class ApiService {
   Future<Worker?> getWorker(String workerId, {String? accountId}) async {
     try {
       final response = await http.get(
-        Uri.parse('$_managementUrl/workers/$workerId'),
-        headers: _getHeaders(
+        Uri.parse('$_gatewayUrl$_managementPath/workers/$workerId'),
+        headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
         ),
@@ -501,8 +506,8 @@ class ApiService {
   Future<Contractor?> getContractor(String contractorId, {String? accountId}) async {
     try {
       final response = await http.get(
-        Uri.parse('$_managementUrl/contractors/$contractorId'),
-        headers: _getHeaders(
+        Uri.parse('$_gatewayUrl$_managementPath/contractors/$contractorId'),
+        headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
         ),
@@ -527,8 +532,8 @@ class ApiService {
   Future<List<Wallet>> getWallets({String? accountId}) async {
     try {
       final response = await http.get(
-        Uri.parse('$_paymentEngineUrl/wallets'),
-        headers: _getHeaders(accountId: accountId),
+        Uri.parse('$_gatewayUrl$_paymentPath/wallets'),
+        headers: await _getHeaders(accountId: accountId),
       );
 
       if (response.statusCode != 200) {
@@ -561,8 +566,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_managementUrl/contractor/$contractorId/processes'),
-        headers: _getHeaders(
+        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/processes'),
+        headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
         ),
@@ -611,8 +616,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$_managementUrl/contractor/$contractorId/processes'),
-        headers: _getHeaders(
+        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/processes'),
+        headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
         ),
@@ -642,8 +647,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_paymentEngineUrl/accounts/$accountId/cards'),
-        headers: _getHeaders(accountId: accountId),
+        Uri.parse('$_gatewayUrl$_paymentPath/accounts/$accountId/cards'),
+        headers: await _getHeaders(accountId: accountId),
       );
 
       if (response.statusCode != 200) {
@@ -674,8 +679,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$_paymentEngineUrl/accounts/$accountId/cards'),
-        headers: _getHeaders(accountId: accountId),
+        Uri.parse('$_gatewayUrl$_paymentPath/accounts/$accountId/cards'),
+        headers: await _getHeaders(accountId: accountId),
         body: jsonEncode({
           'cardHolder': cardHolder,
           'cardNumber': cardNumber,
@@ -703,8 +708,8 @@ class ApiService {
   }) async {
     try {
       final response = await http.delete(
-        Uri.parse('$_paymentEngineUrl/accounts/$accountId/cards/$cardId'),
-        headers: _getHeaders(accountId: accountId),
+        Uri.parse('$_gatewayUrl$_paymentPath/accounts/$accountId/cards/$cardId'),
+        headers: await _getHeaders(accountId: accountId),
       );
 
       if (response.statusCode != 200 && response.statusCode != 204) {

@@ -46,6 +46,7 @@ android {
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        manifestPlaceholders += [appAuthRedirectScheme: "com.recodextech.fixflow"]
     }
 
     buildTypes {

@@ -6,6 +6,7 @@ import 'screens/home_screen.dart';
 import 'providers/worker_provider.dart';
 import 'providers/contractor_provider.dart';
 import 'services/preferences_service.dart';
+import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,12 +27,36 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'FixFlow',
         theme: buildAppTheme(),
-        home: const LoginScreen(),
+        home: const _AuthGate(),
         routes: {
           '/home': (_) => const HomeScreen(),
+          '/login': (_) => const LoginScreen(),
         },
         debugShowCheckedModeBanner: false,
       ),
+    );
+  }
+}
+
+/// Checks auth state and routes to either HomeScreen or LoginScreen.
+class _AuthGate extends StatelessWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: AuthService().isAuthenticated(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.data == true) {
+          return const HomeScreen();
+        }
+        return const LoginScreen();
+      },
     );
   }
 }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/preferences_service.dart';
+import '../services/auth_service.dart';
 import 'worker_profile_screen.dart';
 import 'contractor_profile_screen.dart';
 import 'create_worker_screen.dart';
 import 'create_contractor_screen.dart';
+import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -58,6 +60,16 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute(builder: (_) => const CreateContractorScreen()),
       );
     }
+  }
+
+  Future<void> _logout() async {
+    await AuthService().logout();
+    await PreferencesService().clearAll();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -142,6 +154,30 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: _onContractorTap,
                 ),
                 const SizedBox(height: 32),
+
+                // Logout Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: _logout,
+                    icon: const Icon(Icons.logout_rounded, size: 18),
+                    label: const Text(
+                      'Sign Out',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.4),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
               ],
             ),
           ),
