@@ -132,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   title: 'I am a Worker',
                   subtitle: hasWorker
                       ? workerName ?? 'Worker profile'
-                      : 'Create or manage your worker profile',
+                      : 'Create your worker profile',
                   buttonLabel:
                       hasWorker ? 'Continue as Worker' : 'Create Worker Profile',
                   gradient: AppColors.workerGradient,
@@ -146,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   title: 'I am a Contractor',
                   subtitle: hasContractor
                       ? contractorName ?? 'Contractor profile'
-                      : 'Create or manage your contractor profile',
+                      : 'Create your contractor profile',
                   buttonLabel: hasContractor
                       ? 'Continue as Contractor'
                       : 'Create Contractor Profile',

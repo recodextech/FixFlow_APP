@@ -5,6 +5,7 @@ import '../models/process.dart';
 import '../models/wallet.dart';
 import '../models/worker.dart';
 import '../services/api_service.dart';
+import 'location_picker_screen.dart';
 
 class CreateProcessDialog extends StatefulWidget {
   final String contractorId;
@@ -35,8 +36,6 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
   late Future<List<Category>> _categoriesFuture;
   late Future<List<Wallet>> _walletsFuture;
-  late MapController _mapController;
-
   String? _selectedCategory;
   String? _selectedWalletId;
   bool _isSubmitting = false;
@@ -45,7 +44,6 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   @override
   void initState() {
     super.initState();
-    _mapController = MapController();
     _categoriesFuture = ApiService().getCategories(accountId: widget.accountId);
     _walletsFuture = ApiService().getWallets(accountId: widget.accountId);
   }
@@ -242,15 +240,19 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
           controller: _startTimeController,
           decoration: InputDecoration(
             labelText: 'Start Time',
+            hintText: 'YYYY-MM-DDTHH:MM',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.calendar_today),
               onPressed: _selectStartTime,
             ),
           ),
-          readOnly: true,
-          validator: (value) =>
-              (value == null || value.trim().isEmpty) ? 'Please select start time' : null,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) return 'Please enter start time';
+            final regex = RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$');
+            if (!regex.hasMatch(value.trim())) return 'Use format: YYYY-MM-DDTHH:MM';
+            return null;
+          },
         ),
         const SizedBox(height: 12),
         TextFormField(
@@ -270,46 +272,82 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     );
   }
 
+  Future<void> _openLocationPicker() async {
+    final result = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(initialLocation: _selectedLocation),
+      ),
+    );
+    if (result != null) {
+      setState(() => _selectedLocation = result);
+    }
+  }
+
   Widget _buildLocationMap() {
-    return SizedBox(
-      height: 250,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: _selectedLocation,
-            initialZoom: 15.0,
-            minZoom: 3.0,
-            maxZoom: 18.0,
-            onTap: (_, position) => setState(() => _selectedLocation = position),
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.recodextech.fixflow_app',
-            ),
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: _selectedLocation,
-                  width: 80.0,
-                  height: 80.0,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _openLocationPicker,
+      child: SizedBox(
+        height: 200,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Stack(
+            children: [
+              IgnorePointer(
+                child: FlutterMap(
+                  key: ValueKey(_selectedLocation),
+                  options: MapOptions(
+                    initialCenter: _selectedLocation,
+                    initialZoom: 15.0,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.recodextech.fixflow_app',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _selectedLocation,
+                          width: 80.0,
+                          height: 80.0,
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Colors.red,
+                            size: 40,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                bottom: 8,
+                left: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.location_on,
-                        color: Colors.red,
-                        size: 40,
-                        shadows: const [Shadow(color: Colors.black, blurRadius: 2)],
+                      Icon(Icons.touch_app, color: Colors.white, size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        'Tap to pick location',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -374,10 +412,11 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
               .map((wallet) => DropdownMenuItem(
                     value: wallet.id,
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(wallet.icon, color: wallet.iconColor, size: 20),
                         const SizedBox(width: 8),
-                        Expanded(
+                        Flexible(
                           child: Text(
                             '${wallet.displayName} - \$${wallet.balance.toStringAsFixed(2)}',
                             overflow: TextOverflow.ellipsis,
@@ -444,7 +483,8 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     _startTimeController.dispose();
     _durationController.dispose();
     _amountController.dispose();
-    _mapController.dispose();
     super.dispose();
   }
 }
+
+

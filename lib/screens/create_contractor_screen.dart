@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/contractor.dart';
 import '../providers/contractor_provider.dart';
 import '../services/preferences_service.dart';
+import '../services/api_service.dart';
 import '../theme.dart';
 import 'contractor_profile_screen.dart';
 
@@ -39,18 +41,21 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
                   phoneNumber: contractorPhone,
                 );
 
-        // Persist created contractor as the active profile without clearing worker data.
+        // Update in-memory account data and re-fetch from API.
         if (result['id'] != null) {
           final prefs = PreferencesService();
-          final contractorId = result['id'].toString();
-          await prefs.setContractorId(contractorId);
-          await prefs.setContractorName(contractorName);
-
-          if (result['accountId'] != null) {
-            await prefs.setContractorAccountId(result['accountId'].toString());
-          }
-
+          prefs.setContractorData(Contractor.fromJson(result));
           await prefs.activateContractorProfile();
+
+          // Re-fetch accounts from API to stay in sync
+          try {
+            final accounts = await ApiService().getUserAccounts();
+            prefs.loadUserAccounts(
+              userId: accounts.userId,
+              worker: accounts.worker,
+              contractor: accounts.contractor,
+            );
+          } catch (_) {}
         }
 
         setState(() {

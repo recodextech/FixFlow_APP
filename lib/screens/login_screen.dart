@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
+import '../services/preferences_service.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -26,6 +28,25 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (success) {
+        // Fetch user accounts after login
+        try {
+          final accounts = await ApiService().getUserAccounts();
+          PreferencesService().loadUserAccounts(
+            userId: accounts.userId,
+            worker: accounts.worker,
+            contractor: accounts.contractor,
+          );
+        } catch (_) {
+          if (!mounted) return;
+          await AuthService().logout();
+          await PreferencesService().clearAll();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to load account. Please try again.')),
+          );
+          return;
+        }
+
+        if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomeScreen()),
         );

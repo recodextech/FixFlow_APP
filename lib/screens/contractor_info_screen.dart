@@ -88,7 +88,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
             phoneNumber: _phoneController.text.trim(),
           );
 
-      await PreferencesService().setContractorName(updated.contractorName);
+      PreferencesService().setContractorData(updated);
 
       if (!mounted) {
         return;

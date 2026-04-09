@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../models/availability.dart';
 import '../providers/worker_provider.dart';
 import '../services/preferences_service.dart';
+import 'location_picker_screen.dart';
 
 class CreateWorkerAvailabilityScreen extends StatefulWidget {
   final String workerId;
@@ -38,6 +39,19 @@ class _CreateWorkerAvailabilityScreenState
   final List<_TimeWindowDraft> _timeWindows = [
     _TimeWindowDraft(duration: 1),
   ];
+
+  Future<void> _openLocationPicker() async {
+    final result = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(initialLocation: _selectedLocation),
+      ),
+    );
+    if (result != null) {
+      setState(() => _selectedLocation = result);
+      _reverseGeocode(result);
+    }
+  }
 
   Future<void> _reverseGeocode(LatLng point) async {
     setState(() => _isLoadingAddress = true);
@@ -243,46 +257,74 @@ class _CreateWorkerAvailabilityScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Location (Colombo, Sri Lanka)',
+              'Location',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 250,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: FlutterMap(
-                  options: MapOptions(
-                    initialCenter: _defaultColombo,
-                    initialZoom: 11,
-                    onTap: (_, point) {
-                      setState(() {
-                        _selectedLocation = point;
-                      });
-                      _reverseGeocode(point);
-                    },
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.recodextech.fixflow_app',
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: _selectedLocation,
-                          width: 40,
-                          height: 40,
-                          child: const Icon(
-                            Icons.location_pin,
-                            color: Colors.red,
-                            size: 40,
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _openLocationPicker,
+              child: SizedBox(
+                height: 200,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    children: [
+                      IgnorePointer(
+                        child: FlutterMap(
+                          key: ValueKey(_selectedLocation),
+                          options: MapOptions(
+                            initialCenter: _selectedLocation,
+                            initialZoom: 13,
+                          ),
+                          children: [
+                            TileLayer(
+                              urlTemplate:
+                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              userAgentPackageName: 'com.recodextech.fixflow_app',
+                            ),
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: _selectedLocation,
+                                  width: 40,
+                                  height: 40,
+                                  child: const Icon(
+                                    Icons.location_pin,
+                                    color: Colors.red,
+                                    size: 40,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 8,
+                        left: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.touch_app, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'Tap to pick location',
+                                style: TextStyle(color: Colors.white, fontSize: 12),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -303,17 +345,6 @@ class _CreateWorkerAvailabilityScreenState
                         ),
                 ),
               ],
-            ),
-            const SizedBox(height: 6),
-            TextButton.icon(
-              onPressed: () {
-                setState(() {
-                  _selectedLocation = _defaultColombo;
-                  _selectedAddress = 'Colombo, Sri Lanka';
-                });
-              },
-              icon: const Icon(Icons.my_location, size: 18),
-              label: const Text('Reset to Colombo'),
             ),
             const SizedBox(height: 16),
             const Text(

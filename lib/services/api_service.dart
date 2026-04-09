@@ -3,10 +3,12 @@ import 'package:http/http.dart' as http;
 import '../models/availability.dart';
 import '../models/worker.dart';
 import '../models/contractor.dart';
+import '../models/user_accounts.dart';
 import '../models/process.dart';
 import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
 import 'auth_service.dart';
+import 'preferences_service.dart';
 
 class ApiService {
   // All API calls route through KrakenD gateway
@@ -14,8 +16,7 @@ class ApiService {
 
   // Gateway path prefixes for each backend service
   static const String _managementPath = '/api/v1/management';
-  static const String _matchingPath = '/api/v1/matching';
-  static const String _paymentPath = '/api/v1/payments';
+  static const String _paymentPath = '/api/v1/payment-engine';
   static const String _userId = 'flutter-client';
 
   static final ApiService _instance = ApiService._internal();
@@ -61,19 +62,41 @@ class ApiService {
     String? userId,
   }) async {
     final token = await AuthService().getAccessToken();
+    final resolvedAccountId = accountId ?? PreferencesService().getAccountId();
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
       'user-id':
           userId != null && userId.isNotEmpty ? userId : _userId,
-      if (accountId != null) 'account-id': accountId,
+      if (resolvedAccountId != null) 'account-id': resolvedAccountId,
       if (traceId != null) 'trace-id': traceId,
     };
   }
 
   String _buildTraceId() {
     return 'trace-${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  /// Get user accounts (worker and contractor profiles for the authenticated user)
+  Future<UserAccounts> getUserAccounts() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_gatewayUrl$_managementPath/user/accounts'),
+        headers: await _getHeaders(),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load user accounts: ${response.statusCode}');
+      }
+
+      return UserAccounts.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    } catch (e) {
+      print('Error fetching user accounts: $e');
+      rethrow;
+    }
   }
 
   /// Get all categories
@@ -220,7 +243,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_gatewayUrl$_matchingPath/jobs/worker/$workerId/suggestions'),
+        Uri.parse('$_gatewayUrl$_managementPath/jobs/worker/$workerId/suggestions'),
         headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
@@ -268,7 +291,7 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_gatewayUrl$_matchingPath/jobs/worker/$workerId/assigned'),
+        Uri.parse('$_gatewayUrl$_managementPath/jobs/worker/$workerId/assigned'),
         headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),

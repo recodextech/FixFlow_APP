@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/worker.dart';
 import '../providers/worker_provider.dart';
 import '../services/preferences_service.dart';
+import '../services/api_service.dart';
 import '../theme.dart';
 import 'worker_profile_screen.dart';
 
@@ -72,18 +73,21 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
               workerCategories: _selectedCategories.map((c) => c.id).toList(),
             );
 
-        // Persist created worker as the active profile without clearing contractor data.
+        // Update in-memory account data and re-fetch from API.
         if (result['id'] != null) {
           final prefs = PreferencesService();
-          final workerId = result['id'].toString();
-          await prefs.setWorkerId(workerId);
-          await prefs.setWorkerName(workerName);
-
-          if (result['accountId'] != null) {
-            await prefs.setWorkerAccountId(result['accountId'].toString());
-          }
-
+          prefs.setWorkerData(Worker.fromJson(result));
           await prefs.activateWorkerProfile();
+
+          // Re-fetch accounts from API to stay in sync
+          try {
+            final accounts = await ApiService().getUserAccounts();
+            prefs.loadUserAccounts(
+              userId: accounts.userId,
+              worker: accounts.worker,
+              contractor: accounts.contractor,
+            );
+          } catch (_) {}
         }
 
         setState(() {
