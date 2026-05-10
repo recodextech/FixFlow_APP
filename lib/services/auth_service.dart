@@ -12,9 +12,12 @@ class AuthService {
   final FlutterAppAuth _appAuth = const FlutterAppAuth();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  // Keycloak configuration
+  // Keycloak configuration — toggle between local and remote
+  // static const String _host = 'localhost';           // local dev
+  static const String _host = 'noventispvt.xyz';        // remote server
+
   static const String _issuer =
-      'http://localhost:8060/realms/gateway-demo';
+      'http://$_host:8060/realms/gateway-demo';
   static const String _clientId = 'mobile-app';
   static const String _redirectUri =
       'com.recodextech.fixflow://callback';
@@ -40,10 +43,12 @@ class AuthService {
           scopes: _scopes,
           additionalParameters: {'kc_idp_hint': 'google'},
           allowInsecureConnections: true, // localhost dev only
+          promptValues: ['login'], // Force login page
         ),
       );
 
       if (result.accessToken == null) {
+        print('Auth error: No access token returned');
         return false;
       }
 

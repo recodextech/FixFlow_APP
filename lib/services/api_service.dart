@@ -12,7 +12,7 @@ import 'preferences_service.dart';
 
 class ApiService {
   // All API calls route through KrakenD gateway
-  static const String _gatewayUrl = 'http://localhost:8081';
+  static const String _gatewayUrl = 'http://noventispvt.xyz:8081';
 
   // Gateway path prefixes for each backend service
   static const String _managementPath = '/api/v1/management';

@@ -45,7 +45,21 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   void initState() {
     super.initState();
     _categoriesFuture = ApiService().getCategories(accountId: widget.accountId);
-    _walletsFuture = ApiService().getWallets(accountId: widget.accountId);
+    _walletsFuture = _loadCashWallet();
+  }
+
+  Future<List<Wallet>> _loadCashWallet() async {
+    final wallets = await ApiService().getWallets(accountId: widget.accountId);
+    final cashWallet = wallets.firstWhere(
+      (w) => w.type.toUpperCase() == 'CASH',
+      orElse: () => wallets.isNotEmpty ? wallets.first : Wallet(
+        id: '',
+        type: 'CASH',
+        balance: 0.0,
+      ),
+    );
+    _selectedWalletId = cashWallet.id;
+    return [cashWallet];
   }
 
   Future<void> _submitProcess() async {
@@ -397,38 +411,28 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         if (snapshot.hasError) {
           return Padding(
               padding: const EdgeInsets.all(8),
-              child: Text('Error loading wallets: ${snapshot.error}'));
+              child: Text('Error loading payment method: ${snapshot.error}'));
         }
 
-        final wallets = snapshot.data ?? [];
-        return DropdownButtonFormField<String>(
+        final wallet = (snapshot.data ?? []).isNotEmpty ? snapshot.data!.first : null;
+        if (wallet == null) {
+          return const Padding(
+              padding: EdgeInsets.all(8),
+              child: Text('No CASH wallet available'));
+        }
+
+        return TextFormField(
+          enabled: false,
           decoration: InputDecoration(
-            labelText: 'Select Wallet',
+            labelText: 'Payment Method',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            prefixIcon: const Icon(Icons.account_balance_wallet),
+            prefixIcon: Icon(wallet.icon, color: wallet.iconColor),
+            filled: true,
+            fillColor: Colors.grey[100],
           ),
-          value: _selectedWalletId,
-          items: wallets
-              .map((wallet) => DropdownMenuItem(
-                    value: wallet.id,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(wallet.icon, color: wallet.iconColor, size: 20),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            '${wallet.displayName} - \$${wallet.balance.toStringAsFixed(2)}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ))
-              .toList(),
-          onChanged: (value) => setState(() => _selectedWalletId = value),
-          validator: (value) =>
-              (value == null || value.isEmpty) ? 'Please select a wallet' : null,
+          controller: TextEditingController(
+            text: '${wallet.displayName} - \$${wallet.balance.toStringAsFixed(2)}',
+          ),
         );
       },
     );
