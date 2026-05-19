@@ -1,10 +1,15 @@
+import 'dart:math' show min;
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/process.dart';
 import '../models/wallet.dart';
 import '../models/worker.dart';
 import '../services/api_service.dart';
+import '../services/job_photo_upload.dart';
 import 'location_picker_screen.dart';
 
 class CreateProcessDialog extends StatefulWidget {
@@ -23,6 +28,8 @@ class CreateProcessDialog extends StatefulWidget {
 
 class _CreateProcessDialogState extends State<CreateProcessDialog> {
   static const LatLng _defaultLocation = LatLng(6.927079, 79.861244);
+  static final RegExp _jobStartFormat =
+      RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$');
 
   final _formKey = GlobalKey<FormState>();
   final _processNameController = TextEditingController();
@@ -39,6 +46,8 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   String? _selectedCategory;
   String? _selectedWalletId;
   bool _isSubmitting = false;
+  bool _isAddingJobPhoto = false;
+  final List<Uint8List> _jobPhotoBytes = [];
   LatLng _selectedLocation = _defaultLocation;
 
   @override
@@ -60,6 +69,38 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     );
     _selectedWalletId = cashWallet.id;
     return [cashWallet];
+  }
+
+  /// Whole hours from [start] until midnight (end of that calendar day), capped at 12.
+  int _maxDurationHoursForJobStart(DateTime start) {
+    final endOfDay =
+        DateTime(start.year, start.month, start.day).add(const Duration(days: 1));
+    final wholeHours = endOfDay.difference(start).inMinutes ~/ 60;
+    return min(12, wholeHours);
+  }
+
+  DateTime? _tryParseJobStart() {
+    final t = _startTimeController.text.trim();
+    if (!_jobStartFormat.hasMatch(t)) {
+      return null;
+    }
+    return DateTime.tryParse(t);
+  }
+
+  void _clampDurationToJobStart() {
+    final start = _tryParseJobStart();
+    if (start == null) return;
+    final maxH = _maxDurationHoursForJobStart(start);
+    final d = int.tryParse(_durationController.text.trim());
+    if (maxH < 1) {
+      _durationController.clear();
+      return;
+    }
+    if (d == null || d < 1) {
+      _durationController.text = '1';
+    } else if (d > maxH) {
+      _durationController.text = maxH.toString();
+    }
   }
 
   Future<void> _submitProcess() async {
@@ -93,6 +134,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
           amount: double.parse(_amountController.text.trim()),
           walletId: _selectedWalletId!,
         ),
+        photos: _jobPhotoBytes.map(JobPhotoUpload.toBase64).toList(),
       );
 
       final processRequest = ProcessRequest(
@@ -119,13 +161,22 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     }
   }
 
-  void _selectStartTime() async {
+  Future<void> _selectStartTime() async {
     final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final existing = _tryParseJobStart();
+    var initialDate = existing ?? now;
+    if (initialDate.isBefore(todayStart)) {
+      initialDate = todayStart;
+    }
+    final initialTime =
+        existing != null ? TimeOfDay.fromDateTime(existing) : TimeOfDay.now();
+
     final date = await showDatePicker(
       context: context,
-      initialDate: now,
-      firstDate: now,
-      lastDate: DateTime(now.year + 1),
+      initialDate: initialDate,
+      firstDate: todayStart,
+      lastDate: DateTime(now.year + 1, 12, 31),
     );
 
     if (date == null) return;
@@ -133,18 +184,22 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
     final time = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime: initialTime,
     );
 
     if (time == null) return;
 
     final dateTime =
         DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    _startTimeController.text = '${dateTime.year.toString().padLeft(4, '0')}-'
-        '${dateTime.month.toString().padLeft(2, '0')}-'
-        '${dateTime.day.toString().padLeft(2, '0')}T'
-        '${dateTime.hour.toString().padLeft(2, '0')}:'
-        '${dateTime.minute.toString().padLeft(2, '0')}';
+    if (!mounted) return;
+    setState(() {
+      _startTimeController.text = '${dateTime.year.toString().padLeft(4, '0')}-'
+          '${dateTime.month.toString().padLeft(2, '0')}-'
+          '${dateTime.day.toString().padLeft(2, '0')}T'
+          '${dateTime.hour.toString().padLeft(2, '0')}:'
+          '${dateTime.minute.toString().padLeft(2, '0')}';
+      _clampDurationToJobStart();
+    });
   }
 
   @override
@@ -171,6 +226,8 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                   _buildSectionLabel('Job Information'),
                   const SizedBox(height: 12),
                   _buildJobFields(),
+                  const SizedBox(height: 16),
+                  _buildJobPhotosSection(),
                   const SizedBox(height: 12),
                   _buildSectionLabel('Job Location'),
                   const SizedBox(height: 12),
@@ -261,26 +318,218 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
               onPressed: _selectStartTime,
             ),
           ),
+          onChanged: (_) {
+            setState(_clampDurationToJobStart);
+          },
           validator: (value) {
             if (value == null || value.trim().isEmpty) return 'Please enter start time';
-            final regex = RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$');
-            if (!regex.hasMatch(value.trim())) return 'Use format: YYYY-MM-DDTHH:MM';
+            final trimmed = value.trim();
+            if (!_jobStartFormat.hasMatch(trimmed)) return 'Use format: YYYY-MM-DDTHH:MM';
+            final start = DateTime.tryParse(trimmed);
+            if (start == null) return 'Invalid start date/time';
+            if (_maxDurationHoursForJobStart(start) < 1) {
+              return 'Start is too late: no full hour remains before midnight';
+            }
             return null;
           },
         ),
         const SizedBox(height: 12),
-        TextFormField(
-          controller: _durationController,
-          decoration: const InputDecoration(
-            labelText: 'Duration (hours)',
-            border: OutlineInputBorder(),
-          ),
-          keyboardType: TextInputType.number,
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) return 'Required';
-            if (int.tryParse(value) == null) return 'Invalid';
-            return null;
+        Builder(
+          builder: (context) {
+            final start = _tryParseJobStart();
+            if (start == null) {
+              return TextFormField(
+                controller: _durationController,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: 'Duration (hours)',
+                  hintText: 'Pick start date & time first',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (_) => null,
+              );
+            }
+            final maxHours = _maxDurationHoursForJobStart(start);
+            if (maxHours < 1) {
+              return Text(
+                'Not enough time before midnight for this start time. Pick an earlier start.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 13,
+                ),
+              );
+            }
+            final current = int.tryParse(_durationController.text.trim());
+            if (current == null || current < 1 || current > maxHours) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!context.mounted) return;
+                setState(_clampDurationToJobStart);
+              });
+            }
+            final value = (int.tryParse(_durationController.text.trim()) ?? 1)
+                .clamp(1, maxHours);
+            return DropdownButtonFormField<int>(
+              value: value,
+              decoration: const InputDecoration(
+                labelText: 'Duration (hours, until midnight, max 12)',
+                border: OutlineInputBorder(),
+              ),
+              items: List.generate(
+                maxHours,
+                (i) => DropdownMenuItem(
+                  value: i + 1,
+                  child: Text('${i + 1} hour${i == 0 ? '' : 's'}'),
+                ),
+              ),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _durationController.text = v.toString());
+              },
+              validator: (_) {
+                final d = int.tryParse(_durationController.text.trim());
+                if (d == null || d < 1 || d > maxHours) {
+                  return 'Choose a duration from 1 to $maxHours hour(s)';
+                }
+                return null;
+              },
+            );
           },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showJobPhotoSourceSheet() async {
+    if (_jobPhotoBytes.length >= JobPhotoUpload.maxPhotosPerJob) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You can attach at most ${JobPhotoUpload.maxPhotosPerJob} photos.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take photo'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _addJobPhoto(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _addJobPhoto(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addJobPhoto(ImageSource source) async {
+    setState(() => _isAddingJobPhoto = true);
+    try {
+      final bytes = await JobPhotoUpload.pickAndPrepare(source);
+      if (!mounted) return;
+      if (bytes == null || bytes.isEmpty) return;
+      if (_jobPhotoBytes.length >= JobPhotoUpload.maxPhotosPerJob) return;
+      setState(() => _jobPhotoBytes.add(bytes));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not add photo: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isAddingJobPhoto = false);
+    }
+  }
+
+  void _removeJobPhoto(int index) {
+    setState(() => _jobPhotoBytes.removeAt(index));
+  }
+
+  Widget _buildJobPhotosSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionLabel('Job photos (optional)'),
+        const SizedBox(height: 8),
+        Text(
+          'Up to ${JobPhotoUpload.maxPhotosPerJob} images, compressed as JPEG for smaller requests.',
+          style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ..._jobPhotoBytes.asMap().entries.map((e) {
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(
+                      e.value,
+                      width: 72,
+                      height: 72,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: Material(
+                      color: Colors.black87,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => _removeJobPhoto(e.key),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.close, size: 16, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
+            if (_jobPhotoBytes.length < JobPhotoUpload.maxPhotosPerJob)
+              Material(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  onTap: _isAddingJobPhoto ? null : _showJobPhotoSourceSheet,
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: _isAddingJobPhoto
+                        ? const Padding(
+                            padding: EdgeInsets.all(20),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add_a_photo_outlined, size: 28),
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     );

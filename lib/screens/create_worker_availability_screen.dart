@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
@@ -113,6 +114,27 @@ class _CreateWorkerAvailabilityScreenState
     });
   }
 
+  /// Whole hours from [start] until midnight (end of that calendar day), capped at 12.
+  int _maxDurationHoursForStart(TimeOfDay start) {
+    final startDt = DateTime(2000, 1, 1, start.hour, start.minute);
+    final endOfDay = DateTime(2000, 1, 2);
+    final wholeHours = endOfDay.difference(startDt).inMinutes ~/ 60;
+    return min(12, wholeHours);
+  }
+
+  int _effectiveMaxDurationHours(TimeOfDay? start) {
+    return _maxDurationHoursForStart(
+      start ?? const TimeOfDay(hour: 9, minute: 0),
+    );
+  }
+
+  void _clampTimeWindowDuration(int index) {
+    final w = _timeWindows[index];
+    if (w.startTime == null) return;
+    final maxH = _maxDurationHoursForStart(w.startTime!);
+    if (maxH >= 1 && w.duration > maxH) w.duration = maxH;
+  }
+
   Future<void> _pickTimeWindowStart(int index) async {
     final current = _timeWindows[index].startTime ?? const TimeOfDay(hour: 9, minute: 0);
     final selectedTime = await showTimePicker(
@@ -124,6 +146,7 @@ class _CreateWorkerAvailabilityScreenState
 
     setState(() {
       _timeWindows[index].startTime = selectedTime;
+      _clampTimeWindowDuration(index);
     });
   }
 
@@ -160,6 +183,13 @@ class _CreateWorkerAvailabilityScreenState
       }
       if (window.duration <= 0) {
         return 'Duration must be greater than 0 for window ${index + 1}';
+      }
+      final maxH = _maxDurationHoursForStart(window.startTime!);
+      if (maxH < 1) {
+        return 'Window ${index + 1}: start time is too late for any full-hour slot before midnight';
+      }
+      if (window.duration > maxH) {
+        return 'Window ${index + 1}: duration cannot exceed $maxH hour(s) until midnight (max 12 hours)';
       }
     }
 
@@ -451,24 +481,51 @@ class _CreateWorkerAvailabilityScreenState
                         ),
                       ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<int>(
-                        value: window.duration,
-                        decoration: const InputDecoration(
-                          labelText: 'Duration (hours)',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: List.generate(
-                          24,
-                          (i) => DropdownMenuItem(
-                            value: i + 1,
-                            child: Text('${i + 1} hour${i == 0 ? '' : 's'}'),
-                          ),
-                        ),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() {
-                            window.duration = value;
-                          });
+                      Builder(
+                        builder: (context) {
+                          final maxHours =
+                              _effectiveMaxDurationHours(window.startTime);
+                          if (maxHours < 1) {
+                            return Text(
+                              'Not enough time before midnight for this start time. Pick an earlier start.',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 13,
+                              ),
+                            );
+                          }
+                          if (window.duration > maxHours) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!context.mounted) return;
+                              setState(() {
+                                window.duration = maxHours;
+                              });
+                            });
+                          }
+                          return DropdownButtonFormField<int>(
+                            value: window.duration > maxHours
+                                ? maxHours
+                                : window.duration,
+                            decoration: const InputDecoration(
+                              labelText: 'Duration (hours, until midnight, max 12)',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: List.generate(
+                              maxHours,
+                              (i) => DropdownMenuItem(
+                                value: i + 1,
+                                child: Text(
+                                  '${i + 1} hour${i == 0 ? '' : 's'}',
+                                ),
+                              ),
+                            ),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() {
+                                window.duration = value;
+                              });
+                            },
+                          );
                         },
                       ),
                     ],

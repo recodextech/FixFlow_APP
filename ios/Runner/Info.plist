@@ -86,6 +86,10 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos to attach to your job.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select photos to attach to your job.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

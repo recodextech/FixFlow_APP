@@ -17,7 +17,7 @@ class AuthService {
   static const String _host = 'noventispvt.xyz';        // remote server
 
   static const String _issuer =
-      'http://$_host:8060/realms/gateway-demo';
+      'https://$_host/realms/gateway-demo';
   static const String _clientId = 'mobile-app';
   static const String _redirectUri =
       'com.recodextech.fixflow://callback';
@@ -43,12 +43,10 @@ class AuthService {
           scopes: _scopes,
           additionalParameters: {'kc_idp_hint': 'google'},
           allowInsecureConnections: true, // localhost dev only
-          promptValues: ['login'], // Force login page
         ),
       );
 
       if (result.accessToken == null) {
-        print('Auth error: No access token returned');
         return false;
       }
 

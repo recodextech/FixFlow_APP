@@ -9,6 +9,9 @@ class Job {
   final List<String> jobCategories;
   final PaymentInformation paymentInformation;
 
+  /// Base64-encoded JPEG strings (no `data:` prefix), for create/update payloads.
+  final List<String> photos;
+
   Job({
     required this.description,
     required this.startTime,
@@ -17,6 +20,7 @@ class Job {
     required this.longitude,
     required this.jobCategories,
     required this.paymentInformation,
+    this.photos = const [],
   });
 
   factory Job.fromJson(Map<String, dynamic> json) {
@@ -30,6 +34,10 @@ class Job {
       paymentInformation: PaymentInformation.fromJson(
         json['paymentInformation'] ?? {},
       ),
+      photos: (json['photos'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
     );
   }
 
@@ -42,6 +50,7 @@ class Job {
       'longitude': longitude,
       'jobCategories': jobCategories,
       'paymentInformation': paymentInformation.toJson(),
+      if (photos.isNotEmpty) 'photos': photos,
     };
   }
 }
