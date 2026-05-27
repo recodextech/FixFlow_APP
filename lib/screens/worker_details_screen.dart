@@ -1,10 +1,15 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/availability.dart';
 import '../models/worker.dart';
 import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
+import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
 import 'create_worker_availability_screen.dart';
@@ -24,9 +29,16 @@ class WorkerDetailsScreen extends StatefulWidget {
 class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
   final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
 
   late Future<Worker?> _workerFuture;
   late Future<WorkerAvailabilityResponse> _availabilityFuture;
+  Uint8List? _selectedPhotoBytes;
+  bool _isSaving = false;
+  bool _isFormInitialized = false;
 
   @override
   void initState() {
@@ -37,6 +49,14 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   void _loadData() {
     _workerFuture = _loadWorker();
     _availabilityFuture = _loadAvailabilities();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    super.dispose();
   }
 
   Future<Worker?> _loadWorker() {
@@ -73,6 +93,105 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
     if (result == true) {
       _refreshAvailabilities();
+    }
+  }
+
+  void _populateForm(Worker worker) {
+    if (_isFormInitialized) {
+      return;
+    }
+
+    _nameController.text = worker.workerName;
+    _emailController.text = worker.email;
+    _phoneController.text = worker.phoneNumber;
+    _isFormInitialized = true;
+  }
+
+  Future<void> _showPhotoSourceSheet() async {
+    if (!mounted) return;
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take photo'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose from gallery'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    final bytes = await JobPhotoUpload.pickAndPrepare(source);
+    if (!mounted) return;
+
+    setState(() => _selectedPhotoBytes = bytes);
+  }
+
+  Future<void> _saveWorker(Worker worker) async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null || accountId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account ID not found')),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final updated = await context.read<WorkerProvider>().updateWorker(
+        workerId: widget.workerId,
+        accountId: accountId,
+        workerName: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        workerCategories: worker.workerCategories,
+      );
+
+      final currentPhoto = _selectedPhotoBytes == null
+          ? PreferencesService().getWorkerPhotoBase64()
+          : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
+
+      PreferencesService().setWorkerData(
+        updated.copyWith(photoBase64: currentPhoto),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Worker profile updated successfully')),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update worker: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 
@@ -131,6 +250,12 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
             );
           }
 
+          _populateForm(worker);
+
+          final currentPhotoBase64 = _selectedPhotoBytes == null
+              ? PreferencesService().getWorkerPhotoBase64()
+              : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
+
           return SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -173,22 +298,45 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                           const SizedBox(height: 20),
                           Row(
                             children: [
-                              Container(
-                                width: 56,
-                                height: 56,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    _workerInitial(worker.workerName),
-                                    style: const TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
+                              GestureDetector(
+                                onTap: _showPhotoSourceSheet,
+                                child: Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: (currentPhotoBase64 == null ||
+                                          currentPhotoBase64.isEmpty)
+                                      ? Center(
+                                          child: Text(
+                                            _workerInitial(worker.workerName),
+                                            style: const TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        )
+                                      : Image.memory(
+                                          base64Decode(currentPhotoBase64),
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            return Center(
+                                              child: Text(
+                                                _workerInitial(worker.workerName),
+                                                style: const TextStyle(
+                                                  fontSize: 24,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
                                 ),
                               ),
                               const SizedBox(width: 14),
@@ -228,20 +376,110 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Personal Info
-                      const Text(
-                        'Personal Information',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.text,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Personal Information',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _showPhotoSourceSheet,
+                            icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                            label: const Text('Update photo'),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
-                      _buildInfoRow(Icons.email_outlined, 'Email', worker.email),
-                      _buildInfoRow(Icons.phone_outlined, 'Phone', worker.phoneNumber),
-                      _buildInfoRow(Icons.badge_outlined, 'Account',
-                          worker.accountId ?? 'N/A'),
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextFormField(
+                              controller: _nameController,
+                              decoration: const InputDecoration(
+                                labelText: 'Name',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                              validator: (value) =>
+                                  (value == null || value.trim().isEmpty)
+                                      ? 'Please enter a name'
+                                      : null,
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              decoration: const InputDecoration(
+                                labelText: 'Email',
+                                prefixIcon: Icon(Icons.email_outlined),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Please enter an email';
+                                }
+                                if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                                    .hasMatch(value.trim())) {
+                                  return 'Enter a valid email';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              decoration: const InputDecoration(
+                                labelText: 'Phone',
+                                prefixIcon: Icon(Icons.phone_outlined),
+                              ),
+                              validator: (value) =>
+                                  (value == null || value.trim().isEmpty)
+                                      ? 'Please enter a phone number'
+                                      : null,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildInfoRow(Icons.badge_outlined, 'Account',
+                                worker.accountId ?? 'N/A'),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _isSaving
+                                    ? null
+                                    : () => _saveWorker(worker),
+                                icon: _isSaving
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.save_outlined),
+                                label: Text(_isSaving
+                                    ? 'Saving...'
+                                    : 'Save Changes'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.green,
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 24),
                       // Categories
                       const Text(

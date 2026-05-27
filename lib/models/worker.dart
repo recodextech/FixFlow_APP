@@ -29,6 +29,7 @@ class Worker {
   final String phoneNumber;
   final List<String> workerCategories;
   final String? accountId;
+  final String? photoBase64;
 
   List<String> get categories => workerCategories;
 
@@ -39,6 +40,7 @@ class Worker {
     required this.phoneNumber,
     required this.workerCategories,
     this.accountId,
+    this.photoBase64,
   });
 
   factory Worker.fromJson(Map<String, dynamic> json) {
@@ -52,6 +54,27 @@ class Worker {
       phoneNumber: json['phoneNumber'] ?? '',
       workerCategories: categoryList.map((item) => item.toString()).toList(),
       accountId: json['accountId'],
+      photoBase64: json['photoBase64'] as String?,
+    );
+  }
+
+  Worker copyWith({
+    String? id,
+    String? workerName,
+    String? email,
+    String? phoneNumber,
+    List<String>? workerCategories,
+    String? accountId,
+    String? photoBase64,
+  }) {
+    return Worker(
+      id: id ?? this.id,
+      workerName: workerName ?? this.workerName,
+      email: email ?? this.email,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      workerCategories: workerCategories ?? this.workerCategories,
+      accountId: accountId ?? this.accountId,
+      photoBase64: photoBase64 ?? this.photoBase64,
     );
   }
 
@@ -64,6 +87,8 @@ class Worker {
       'workerCategories': workerCategories,
       'categories': workerCategories,
       'accountId': accountId,
+      if (photoBase64 != null && photoBase64!.isNotEmpty)
+        'photoBase64': photoBase64,
     };
   }
 }

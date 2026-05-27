@@ -21,8 +21,9 @@ class PreferencesService {
     _prefs = await SharedPreferences.getInstance();
   }
 
-  // Only selected_type is persisted locally (UI preference)
   static const String _selectedTypeKey = 'selected_type';
+  static const String _workerPhotoKey = 'worker_photo_base64';
+  static const String _contractorPhotoKey = 'contractor_photo_base64';
 
   /// Load user accounts data from API response into memory.
   void loadUserAccounts({
@@ -31,24 +32,52 @@ class PreferencesService {
     Contractor? contractor,
   }) {
     _userId = userId;
-    _worker = worker;
-    _contractor = contractor;
+
+    final savedWorkerPhoto = _prefs.getString(_workerPhotoKey);
+    final savedContractorPhoto = _prefs.getString(_contractorPhotoKey);
+
+    _worker = worker == null
+        ? _worker
+        : worker.copyWith(photoBase64: worker.photoBase64 ?? savedWorkerPhoto);
+
+    _contractor = contractor == null
+        ? _contractor
+        : contractor.copyWith(
+            photoBase64: contractor.photoBase64 ?? savedContractorPhoto,
+          );
   }
 
-  /// Update worker data in memory (e.g., after creating a new worker).
   void setWorkerData(Worker worker) {
-    _worker = worker;
+    final mergedPhoto = worker.photoBase64 ?? _prefs.getString(_workerPhotoKey);
+    _worker = worker.copyWith(photoBase64: mergedPhoto);
+    if (mergedPhoto == null || mergedPhoto.isEmpty) {
+      _prefs.remove(_workerPhotoKey);
+    } else {
+      _prefs.setString(_workerPhotoKey, mergedPhoto);
+    }
   }
 
-  /// Update contractor data in memory (e.g., after creating a new contractor).
   void setContractorData(Contractor contractor) {
-    _contractor = contractor;
+    final mergedPhoto =
+        contractor.photoBase64 ?? _prefs.getString(_contractorPhotoKey);
+    _contractor = contractor.copyWith(photoBase64: mergedPhoto);
+    if (mergedPhoto == null || mergedPhoto.isEmpty) {
+      _prefs.remove(_contractorPhotoKey);
+    } else {
+      _prefs.setString(_contractorPhotoKey, mergedPhoto);
+    }
   }
 
-  // User ID
+  String? getWorkerPhotoBase64() {
+    return _worker?.photoBase64 ?? _prefs.getString(_workerPhotoKey);
+  }
+
+  String? getContractorPhotoBase64() {
+    return _contractor?.photoBase64 ?? _prefs.getString(_contractorPhotoKey);
+  }
+
   String? getUserId() => _userId;
 
-  // Account ID (returns active account based on selected type)
   String? getAccountId() {
     final selectedType = getSelectedType();
     if (selectedType == 'WORKER') {
@@ -59,19 +88,14 @@ class PreferencesService {
     return _worker?.accountId ?? _contractor?.accountId;
   }
 
-  // Worker ID
   String? getWorkerId() => _worker?.id;
 
-  // Worker Account ID
   String? getWorkerAccountId() => _worker?.accountId;
 
-  // Contractor ID
   String? getContractorId() => _contractor?.id;
 
-  // Contractor Account ID
   String? getContractorAccountId() => _contractor?.accountId;
 
-  // Selected Type (WORKER or CONTRACTOR) - persisted locally as UI preference
   Future<void> setSelectedType(String type) async {
     await _prefs.setString(_selectedTypeKey, type);
   }
@@ -80,13 +104,10 @@ class PreferencesService {
     return _prefs.getString(_selectedTypeKey);
   }
 
-  // Worker Name
   String? getWorkerName() => _worker?.workerName;
 
-  // Contractor Name
   String? getContractorName() => _contractor?.contractorName;
 
-  // Active profile helpers
   Future<void> activateWorkerProfile() async {
     await setSelectedType('WORKER');
   }
@@ -95,15 +116,15 @@ class PreferencesService {
     await setSelectedType('CONTRACTOR');
   }
 
-  // Clear all
   Future<void> clearAll() async {
     _userId = null;
     _worker = null;
     _contractor = null;
     await _prefs.remove(_selectedTypeKey);
+    await _prefs.remove(_workerPhotoKey);
+    await _prefs.remove(_contractorPhotoKey);
   }
 
-  // Check if has profile
   bool hasWorkerProfile() => _worker != null;
 
   bool hasContractorProfile() => _contractor != null;

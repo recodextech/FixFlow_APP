@@ -125,6 +125,7 @@ class ApiService {
     required String email,
     required String phoneNumber,
     required List<String> workerCategories,
+    String? photoBase64,
   }) async {
     try {
       final payload = {
@@ -132,6 +133,8 @@ class ApiService {
         'email': email,
         'phoneNumber': phoneNumber,
         'workerCategories': workerCategories,
+        if (photoBase64 != null && photoBase64.isNotEmpty)
+          'ProfilePicture': photoBase64,
       };
 
       final response = await http.post(
@@ -147,6 +150,62 @@ class ApiService {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } catch (e) {
       print('Error creating worker: $e');
+      rethrow;
+    }
+  }
+
+  /// Update worker by ID
+  Future<Worker> updateWorker({
+    required String workerId,
+    required String accountId,
+    required String workerName,
+    required String email,
+    required String phoneNumber,
+    required List<String> workerCategories,
+  }) async {
+    try {
+      final payload = {
+        'workerName': workerName,
+        'email': email,
+        'phoneNumber': phoneNumber,
+        'workerCategories': workerCategories,
+      };
+
+      final response = await http.patch(
+        Uri.parse('$_gatewayUrl$_managementPath/workers/$workerId'),
+        headers: await _getHeaders(
+          accountId: accountId,
+          traceId: _buildTraceId(),
+          userId: workerId,
+        ),
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode != 200 &&
+          response.statusCode != 201 &&
+          response.statusCode != 202 &&
+          response.statusCode != 204) {
+        throw Exception(
+          'Failed to update worker: ${response.statusCode} - ${response.body}',
+        );
+      }
+
+      if (response.body.isEmpty) {
+        final refreshed = await getWorker(workerId, accountId: accountId);
+        return refreshed ??
+            Worker(
+              id: workerId,
+              workerName: workerName,
+              email: email,
+              phoneNumber: phoneNumber,
+              workerCategories: workerCategories,
+              accountId: accountId,
+            );
+      }
+
+      return Worker.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } catch (e) {
+      print('Error updating worker: $e');
       rethrow;
     }
   }
@@ -409,6 +468,7 @@ class ApiService {
     required String contractorType,
     required String email,
     required String phoneNumber,
+    String? photoBase64,
   }) async {
     try {
       final payload = {
@@ -416,6 +476,8 @@ class ApiService {
         'contractorType': contractorType,
         'email': email,
         'phoneNumber': phoneNumber,
+        if (photoBase64 != null && photoBase64.isNotEmpty)
+          'ProfilePicture': photoBase64,
       };
 
       final response = await http.post(

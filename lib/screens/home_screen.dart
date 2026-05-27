@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/preferences_service.dart';
@@ -77,6 +79,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = PreferencesService();
     final workerName = prefs.getWorkerName();
     final contractorName = prefs.getContractorName();
+    final workerPhotoBase64 = prefs.getWorkerPhotoBase64();
+    final contractorPhotoBase64 = prefs.getContractorPhotoBase64();
     final hasWorker =
         prefs.getWorkerId() != null && prefs.getWorkerId()!.isNotEmpty;
     final hasContractor =
@@ -136,6 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   buttonLabel:
                       hasWorker ? 'Continue as Worker' : 'Create Worker Profile',
                   gradient: AppColors.workerGradient,
+                  photoBase64: workerPhotoBase64,
                   onTap: _onWorkerTap,
                 ),
                 const SizedBox(height: 20),
@@ -151,6 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ? 'Continue as Contractor'
                       : 'Create Contractor Profile',
                   gradient: AppColors.contractorOrangeGradient,
+                  photoBase64: contractorPhotoBase64,
                   onTap: _onContractorTap,
                 ),
                 const SizedBox(height: 32),
@@ -193,6 +199,7 @@ class _RoleCard extends StatelessWidget {
   final String subtitle;
   final String buttonLabel;
   final List<Color> gradient;
+  final String? photoBase64;
   final VoidCallback onTap;
 
   const _RoleCard({
@@ -201,11 +208,14 @@ class _RoleCard extends StatelessWidget {
     required this.subtitle,
     required this.buttonLabel,
     required this.gradient,
+    required this.photoBase64,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final imageProvider = _memoryImageFromBase64(photoBase64);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -228,7 +238,23 @@ class _RoleCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Icon(icon, size: 52, color: Colors.white),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: imageProvider == null
+                  ? Icon(icon, size: 42, color: Colors.white)
+                  : Image.memory(
+                      base64Decode(photoBase64!),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          Icon(icon, size: 42, color: Colors.white),
+                    ),
+            ),
             const SizedBox(height: 14),
             Text(
               title,
@@ -267,5 +293,17 @@ class _RoleCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+MemoryImage? _memoryImageFromBase64(String? photoBase64) {
+  if (photoBase64 == null || photoBase64.isEmpty) {
+    return null;
+  }
+
+  try {
+    return MemoryImage(base64Decode(photoBase64));
+  } catch (_) {
+    return null;
   }
 }

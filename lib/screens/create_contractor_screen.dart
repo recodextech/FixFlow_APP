@@ -1,7 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../models/contractor.dart';
 import '../providers/contractor_provider.dart';
+import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
@@ -21,8 +25,45 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
   final _phoneController = TextEditingController();
 
   String _contractorType = 'COMPANY';
+  Uint8List? _profilePhotoBytes;
   bool _isSubmitting = false;
   Map<String, dynamic>? _result;
+
+  Future<void> _showPhotoSourceSheet() async {
+    if (!mounted) return;
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take photo'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose from gallery'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    final bytes = await JobPhotoUpload.pickAndPrepare(source);
+    if (!mounted) return;
+
+    setState(() => _profilePhotoBytes = bytes);
+  }
 
   Future<void> _submitForm() async {
     if (_formKey.currentState!.validate()) {
@@ -32,6 +73,9 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
         final contractorName = _nameController.text.trim();
         final contractorEmail = _emailController.text.trim();
         final contractorPhone = _phoneController.text.trim();
+        final photoBase64 = _profilePhotoBytes == null
+            ? null
+            : JobPhotoUpload.toBase64(_profilePhotoBytes!);
 
         final result =
             await context.read<ContractorProvider>().createContractor(
@@ -39,15 +83,16 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
                   contractorType: _contractorType,
                   email: contractorEmail,
                   phoneNumber: contractorPhone,
+                  photoBase64: photoBase64,
                 );
 
-        // Update in-memory account data and re-fetch from API.
         if (result['id'] != null) {
           final prefs = PreferencesService();
-          prefs.setContractorData(Contractor.fromJson(result));
+          prefs.setContractorData(
+            Contractor.fromJson(result).copyWith(photoBase64: photoBase64),
+          );
           await prefs.activateContractorProfile();
 
-          // Re-fetch accounts from API to stay in sync
           try {
             final accounts = await ApiService().getUserAccounts();
             prefs.loadUserAccounts(
@@ -62,6 +107,7 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
           _result = result;
           _formKey.currentState!.reset();
           _contractorType = 'COMPANY';
+          _profilePhotoBytes = null;
           _nameController.clear();
           _emailController.clear();
           _phoneController.clear();
@@ -176,6 +222,75 @@ class _CreateContractorScreenState extends State<CreateContractorScreen> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 28),
+                    const Text(
+                      'Profile Photo',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: _showPhotoSourceSheet,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.gray3),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                color: AppColors.bluePale,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: _profilePhotoBytes == null
+                                  ? const Icon(
+                                      Icons.camera_alt_outlined,
+                                      color: AppColors.blue,
+                                      size: 30,
+                                    )
+                                  : Image.memory(
+                                      _profilePhotoBytes!,
+                                      fit: BoxFit.cover,
+                                    ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Text(
+                                    'Upload a profile photo',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.text,
+                                    ),
+                                  ),
+                                  SizedBox(height: 6),
+                                  Text(
+                                    'Tap to choose a photo from camera or gallery.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.text3,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 28),
                     // Details section

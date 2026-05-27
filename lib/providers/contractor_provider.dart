@@ -17,6 +17,7 @@ class ContractorProvider extends ChangeNotifier {
     required String contractorType,
     required String email,
     required String phoneNumber,
+    String? photoBase64,
   }) async {
     _isLoading = true;
     _error = null;
@@ -28,6 +29,7 @@ class ContractorProvider extends ChangeNotifier {
         contractorType: contractorType,
         email: email,
         phoneNumber: phoneNumber,
+        photoBase64: photoBase64,
       );
       _error = null;
       return result;

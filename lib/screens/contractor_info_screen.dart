@@ -1,9 +1,14 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../models/contractor.dart';
 import '../providers/contractor_provider.dart';
-import '../services/preferences_service.dart';
 import '../services/api_service.dart';
+import '../services/job_photo_upload.dart';
+import '../services/preferences_service.dart';
 import '../theme.dart';
 
 class ContractorInfoScreen extends StatefulWidget {
@@ -29,6 +34,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
   late Future<Contractor?> _contractorFuture;
 
   String _contractorType = 'COMPANY';
+  Uint8List? _selectedPhotoBytes;
   bool _isSubmitting = false;
   bool _isFormInitialized = false;
 
@@ -61,7 +67,43 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     _isFormInitialized = true;
   }
 
-  Future<void> _saveContractor() async {
+  Future<void> _showPhotoSourceSheet() async {
+    if (!mounted) return;
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take photo'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose from gallery'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
+    final bytes = await JobPhotoUpload.pickAndPrepare(source);
+    if (!mounted) return;
+
+    setState(() => _selectedPhotoBytes = bytes);
+  }
+
+  Future<void> _saveContractor(Contractor contractor) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -88,13 +130,18 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
             phoneNumber: _phoneController.text.trim(),
           );
 
-      PreferencesService().setContractorData(updated);
+      final currentPhoto = _selectedPhotoBytes == null
+          ? PreferencesService().getContractorPhotoBase64() ?? contractor.photoBase64
+          : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
+
+      final savedContractor = updated.copyWith(photoBase64: currentPhoto);
+      PreferencesService().setContractorData(savedContractor);
 
       if (!mounted) {
         return;
       }
 
-      Navigator.of(context).pop(updated);
+      Navigator.of(context).pop(savedContractor);
     } catch (e) {
       if (!mounted) {
         return;
@@ -167,6 +214,10 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
 
           _populateForm(contractor);
 
+          final currentPhotoBase64 = _selectedPhotoBytes == null
+              ? PreferencesService().getContractorPhotoBase64() ?? contractor.photoBase64
+              : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
+
           return SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -209,25 +260,51 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                           const SizedBox(height: 20),
                           Row(
                             children: [
-                              Container(
-                                width: 56,
-                                height: 56,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    contractor.contractorName.isNotEmpty
-                                        ? contractor.contractorName[0]
-                                            .toUpperCase()
-                                        : 'C',
-                                    style: const TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
+                              GestureDetector(
+                                onTap: _showPhotoSourceSheet,
+                                child: Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(16),
                                   ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: (currentPhotoBase64 == null ||
+                                          currentPhotoBase64.isEmpty)
+                                      ? Center(
+                                          child: Text(
+                                            contractor.contractorName.isNotEmpty
+                                                ? contractor.contractorName[0]
+                                                    .toUpperCase()
+                                                : 'C',
+                                            style: const TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        )
+                                      : Image.memory(
+                                          base64Decode(currentPhotoBase64),
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            return Center(
+                                              child: Text(
+                                                contractor.contractorName.isNotEmpty
+                                                    ? contractor.contractorName[0]
+                                                        .toUpperCase()
+                                                    : 'C',
+                                                style: const TextStyle(
+                                                  fontSize: 24,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
                                 ),
                               ),
                               const SizedBox(width: 14),
@@ -271,13 +348,23 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Edit Information
-                        const Text(
-                          'Edit Information',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.text,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Edit Information',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.text,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: _showPhotoSourceSheet,
+                              icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                              label: const Text('Update photo'),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
@@ -346,7 +433,9 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                           width: double.infinity,
                           height: 48,
                           child: ElevatedButton(
-                            onPressed: _isSubmitting ? null : _saveContractor,
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => _saveContractor(contractor),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.blue,
                               foregroundColor: Colors.white,

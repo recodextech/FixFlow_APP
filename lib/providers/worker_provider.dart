@@ -33,6 +33,7 @@ class WorkerProvider extends ChangeNotifier {
     required String email,
     required String phoneNumber,
     required List<String> workerCategories,
+    String? photoBase64,
   }) async {
     _isLoading = true;
     _error = null;
@@ -40,6 +41,40 @@ class WorkerProvider extends ChangeNotifier {
 
     try {
       final result = await _apiService.createWorker(
+        workerName: workerName,
+        email: email,
+        phoneNumber: phoneNumber,
+        workerCategories: workerCategories,
+        photoBase64: photoBase64,
+      );
+      _error = null;
+      return result;
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Update an existing worker
+  Future<Worker> updateWorker({
+    required String workerId,
+    required String accountId,
+    required String workerName,
+    required String email,
+    required String phoneNumber,
+    required List<String> workerCategories,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _apiService.updateWorker(
+        workerId: workerId,
+        accountId: accountId,
         workerName: workerName,
         email: email,
         phoneNumber: phoneNumber,

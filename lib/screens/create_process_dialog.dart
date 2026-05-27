@@ -2,6 +2,7 @@ import 'dart:math' show min;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -631,19 +632,35 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         }
 
         final categories = snapshot.data ?? [];
+        if (categories.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text('No categories available'),
+          );
+        }
+
         return DropdownButtonFormField<String>(
           decoration: InputDecoration(
             labelText: 'Select Category',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             prefixIcon: const Icon(Icons.category),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
           value: _selectedCategory,
+          isExpanded: true,
           items: categories
-              .map((cat) => DropdownMenuItem(value: cat.id, child: Text(cat.name)))
+              .map((cat) => DropdownMenuItem<String>(
+                    value: cat.id,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(cat.name),
+                    ),
+                  ))
               .toList(),
           onChanged: (value) => setState(() => _selectedCategory = value),
           validator: (value) =>
               (value == null || value.isEmpty) ? 'Please select a category' : null,
+          dropdownColor: Theme.of(context).colorScheme.surface,
         );
       },
     );
@@ -694,9 +711,14 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         labelText: 'Amount',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         prefixIcon: const Icon(Icons.attach_money),
-        prefixText: ' ',
+        prefixText: '\$ ',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+      ],
+      style: const TextStyle(fontSize: 16),
       validator: (value) {
         if (value == null || value.trim().isEmpty) return 'Please enter amount';
         if (double.tryParse(value) == null) return 'Invalid amount';
