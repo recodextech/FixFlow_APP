@@ -42,6 +42,8 @@ class ContractorProcessJobSummary {
   final double longitude;
   final String jobStartTime;
   final int durationHours;
+  final String assignedWorkerId;
+  final String assignedWorkerName;
 
   ContractorProcessJobSummary({
     required this.id,
@@ -50,6 +52,8 @@ class ContractorProcessJobSummary {
     required this.longitude,
     required this.jobStartTime,
     required this.durationHours,
+    this.assignedWorkerId = '',
+    this.assignedWorkerName = '',
   });
 
   factory ContractorProcessJobSummary.fromJson(Map<String, dynamic> json) {
@@ -60,6 +64,8 @@ class ContractorProcessJobSummary {
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       jobStartTime: json['jobStartTime'] ?? json['startTime'] ?? '',
       durationHours: json['durationHours'] ?? json['duration'] ?? 0,
+      assignedWorkerId: (json['assignedWorkerId'] ?? json['workerId'] ?? '').toString(),
+      assignedWorkerName: (json['assignedWorkerName'] ?? json['workerName'] ?? '').toString(),
     );
   }
 }

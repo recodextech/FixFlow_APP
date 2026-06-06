@@ -42,11 +42,18 @@ class AuthService {
           issuer: _issuer,
           scopes: _scopes,
           additionalParameters: {'kc_idp_hint': 'google'},
-          allowInsecureConnections: true, // localhost dev only
         ),
       );
 
-      if (result.accessToken == null) {
+      print('Result: $result');
+
+      if (result == null) {
+        return false;
+      }
+      print('Access token: ${result?.accessToken}');
+
+      final accessToken = result.accessToken;
+      if (accessToken == null) {
         return false;
       }
 
@@ -74,7 +81,12 @@ class AuthService {
         ),
       );
 
-      if (result.accessToken == null) {
+      if (result == null) {
+        return false;
+      }
+
+      final accessToken = result.accessToken;
+      if (accessToken == null) {
         return false;
       }
 
@@ -142,8 +154,12 @@ class AuthService {
   // -- Private helpers --
 
   Future<void> _storeTokens(TokenResponse result) async {
-    await _secureStorage.write(
-        key: _accessTokenKey, value: result.accessToken);
+    final accessToken = result.accessToken;
+    if (accessToken == null) {
+      return;
+    }
+
+    await _secureStorage.write(key: _accessTokenKey, value: accessToken);
 
     if (result.refreshToken != null) {
       await _secureStorage.write(
@@ -157,7 +173,7 @@ class AuthService {
     }
 
     // Decode JWT to extract user info
-    _extractAndStoreUserInfo(result.accessToken!);
+    _extractAndStoreUserInfo(accessToken);
   }
 
   Future<void> _extractAndStoreUserInfo(String accessToken) async {

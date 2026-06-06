@@ -7,6 +7,7 @@ import '../models/user_accounts.dart';
 import '../models/process.dart';
 import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
+import '../models/job_images.dart';
 import 'auth_service.dart';
 import 'preferences_service.dart';
 
@@ -339,6 +340,88 @@ class ApiService {
       return const WorkerJobSuggestionResponse(availableJobs: []);
     } catch (e) {
       print('Error fetching worker job suggestions: $e');
+      rethrow;
+    }
+  }
+
+  /// Get images for a job
+  Future<ImagesResponse> getJobImages({
+    required String jobId,
+    required String accountId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_gatewayUrl$_managementPath/job/$jobId/images'),
+        headers: await _getHeaders(accountId: accountId),
+      );
+
+      if (response.statusCode == 404) {
+        return ImagesResponse(images: []);
+      }
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load job images: ${response.statusCode} - ${response.body}');
+      }
+
+      if (response.body.isEmpty) {
+        return ImagesResponse(images: []);
+      }
+
+      return ImagesResponse.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } catch (e) {
+      print('Error fetching job images: $e');
+      rethrow;
+    }
+  }
+
+  /// Get worker profile picture
+  Future<ImageItem?> getWorkerProfilePicture({
+    required String workerId,
+    String? accountId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_gatewayUrl$_managementPath/workers/$workerId/profile-picture'),
+        headers: await _getHeaders(accountId: accountId),
+      );
+
+      if (response.statusCode == 404) return null;
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load worker profile picture: ${response.statusCode} - ${response.body}');
+      }
+
+      if (response.body.isEmpty) return null;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return ImageItem.fromJson(data);
+    } catch (e) {
+      print('Error fetching worker profile picture: $e');
+      rethrow;
+    }
+  }
+
+  /// Get contractor profile picture
+  Future<ImageItem?> getContractorProfilePicture({
+    required String contractorId,
+    String? accountId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_gatewayUrl$_managementPath/contractors/$contractorId/profile-picture'),
+        headers: await _getHeaders(accountId: accountId),
+      );
+
+      if (response.statusCode == 404) return null;
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load contractor profile picture: ${response.statusCode} - ${response.body}');
+      }
+
+      if (response.body.isEmpty) return null;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return ImageItem.fromJson(data);
+    } catch (e) {
+      print('Error fetching contractor profile picture: $e');
       rethrow;
     }
   }

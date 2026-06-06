@@ -6,6 +6,8 @@ import '../providers/contractor_provider.dart';
 import '../services/preferences_service.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
+import '../widgets/job_images_widget.dart';
+import '../widgets/profile_avatar.dart';
 import 'contractor_info_screen.dart';
 import 'contractor_widgets.dart';
 import 'create_process_dialog.dart';
@@ -443,6 +445,9 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
             ),
             if (job != null) ...[
               const Divider(height: 20),
+              // Job images
+              JobImagesWidget(jobId: job.id, height: 150),
+              const SizedBox(height: 8),
               _buildDetailRow(Icons.schedule, 'Start', formatJobStartTime(job.jobStartTime)),
               const SizedBox(height: 6),
               _buildDetailRow(Icons.timer_outlined, 'Duration', '${job.durationHours}h'),
@@ -453,6 +458,39 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                 job.latitude,
                 job.longitude,
               ),
+              const SizedBox(height: 8),
+              if (job.assignedWorkerId.isNotEmpty) ...[
+                const Divider(height: 12),
+                Row(
+                  children: [
+                    ProfileAvatar(id: job.assignedWorkerId, isWorker: true, radius: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            job.assignedWorkerName.isNotEmpty ? job.assignedWorkerName : 'Assigned worker',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text('Tap to view worker details', style: const TextStyle(fontSize: 12, color: AppColors.text3)),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        // open worker details screen if available
+                        final workerId = job.assignedWorkerId;
+                        if (workerId.isNotEmpty) {
+                          Navigator.pushNamed(context, '/worker/${workerId}');
+                        }
+                      },
+                      icon: const Icon(Icons.arrow_forward_ios, size: 18),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ],
         ),

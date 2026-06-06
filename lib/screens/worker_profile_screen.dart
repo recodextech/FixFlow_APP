@@ -7,6 +7,8 @@ import '../models/contractor.dart';
 import '../models/worker.dart';
 import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
+import '../widgets/job_images_widget.dart';
+import '../widgets/profile_avatar.dart';
 import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
 import '../services/preferences_service.dart';
@@ -653,7 +655,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   }
 
   Widget _buildSuggestedJobsTab() {
-    return FutureBuilder<WorkerJobSuggestionResponse>(
+                return FutureBuilder<WorkerJobSuggestionResponse>(
       future: _jobSuggestionsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -792,15 +794,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           children: [
             Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.greenPale,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.assignment, size: 18, color: AppColors.green),
-                ),
+                ProfileAvatar(id: job.contractorId, isWorker: false, radius: 18),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -815,6 +809,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                 JobStatusChip(status: status),
               ],
             ),
+            const SizedBox(height: 12),
+            // Job images (tap to cycle through available images)
+            JobImagesWidget(jobId: job.jobId, height: 160),
             const SizedBox(height: 12),
             _buildDetailRow(Icons.business, 'Contractor',
                 job.contractorName.isEmpty ? 'N/A' : job.contractorName),
@@ -894,7 +891,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final jobPoint = LatLng(job.jobLatitude, job.jobLongitude);
     final distanceKm = _distance.as(LengthUnit.Kilometer, workerPoint, jobPoint);
 
-    return Container(
+                    return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -908,15 +905,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           children: [
             Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.orangePale,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.lightbulb_outline, size: 18, color: AppColors.orange),
-                ),
+                                const SizedBox(width: 4),
+                                ProfileAvatar(id: job.contractorId, isWorker: false, radius: 18),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -941,7 +931,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               ],
             ),
             const SizedBox(height: 12),
-            _buildDetailRow(Icons.schedule, 'Start', _formatSuggestedJobStartTime(job)),
+          // Job images for suggestion (interactive)
+          JobImagesWidget(jobId: job.jobId, height: 150),
+          const SizedBox(height: 12),
+          _buildDetailRow(Icons.schedule, 'Start', _formatSuggestedJobStartTime(job)),
             _buildDetailRow(Icons.timer, 'Duration', '${job.jobDurationHours}h'),
             _buildDetailRow(Icons.alt_route, 'Distance', '${distanceKm.toStringAsFixed(1)} km'),
             _buildAddressRow(Icons.location_on, 'Location', job.jobLatitude, job.jobLongitude),
