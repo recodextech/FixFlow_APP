@@ -102,6 +102,70 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     });
   }
 
+  Future<void> _deleteProcess(String processId) async {
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null) return;
+
+    try {
+      await ApiService().deleteContractorProcess(
+        contractorId: widget.contractorId,
+        processId: processId,
+        accountId: accountId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _processesFuture = _loadContractorProcesses();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Process deleted successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete process: $e')),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteProcess(ContractorProcessSummary process) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Job'),
+        content: Text('Are you sure you want to delete "${process.name.isNotEmpty ? process.name : 'this job'}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _deleteProcess(process.processId);
+    }
+  }
+
+  bool _canDeleteProcess(ContractorProcessSummary process) {
+    // Process can be deleted only if it's not assigned or accepted.
+    // "Not assigned" means assignedWorkerId is empty.
+    // "Not accepted" generally means status is CREATED or PENDING.
+    final status = process.status.toUpperCase();
+    final isPendingOrCreated = status == 'PENDING' || status == 'CREATED';
+    final isNotAssigned = (process.job?.assignedWorkerId ?? '').isEmpty;
+    
+    return isPendingOrCreated && isNotAssigned;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -283,25 +347,10 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
               const SizedBox(height: 20),
               Row(
                 children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Center(
-                      child: Text(
-                        contractor.contractorName.isNotEmpty
-                            ? contractor.contractorName[0].toUpperCase()
-                            : 'C',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
+                  ProfileAvatar(
+                    id: contractor.id,
+                    isWorker: false,
+                    radius: 28,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -429,14 +478,17 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                           color: AppColors.text,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'ID: ${process.processId}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.text3),
-                      ),
                     ],
                   ),
                 ),
+                if (_canDeleteProcess(process))
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: AppColors.red, size: 20),
+                    onPressed: () => _confirmDeleteProcess(process),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                const SizedBox(width: 8),
                 ProcessStatusChip(
                   label: process.status,
                   color: statusColor,

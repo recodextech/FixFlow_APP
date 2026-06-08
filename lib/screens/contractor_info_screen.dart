@@ -121,6 +121,10 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     });
 
     try {
+      final currentPhoto = _selectedPhotoBytes == null
+          ? PreferencesService().getContractorPhotoBase64() ?? contractor.photoBase64
+          : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
+
       final updated = await context.read<ContractorProvider>().updateContractor(
             contractorId: widget.contractorId,
             accountId: accountId,
@@ -128,11 +132,8 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
             contractorType: _contractorType,
             email: _emailController.text.trim(),
             phoneNumber: _phoneController.text.trim(),
+            photoBase64: _selectedPhotoBytes != null ? currentPhoto : null,
           );
-
-      final currentPhoto = _selectedPhotoBytes == null
-          ? PreferencesService().getContractorPhotoBase64() ?? contractor.photoBase64
-          : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
 
       final savedContractor = updated.copyWith(photoBase64: currentPhoto);
       PreferencesService().setContractorData(savedContractor);

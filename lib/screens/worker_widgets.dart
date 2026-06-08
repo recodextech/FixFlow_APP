@@ -103,7 +103,7 @@ class ActionButton extends StatelessWidget {
   final IconData icon;
   final Color color;
   final bool isLoading;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   const ActionButton({
     super.key,

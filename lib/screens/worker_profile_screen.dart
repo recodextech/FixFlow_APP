@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import '../models/availability.dart';
 import '../models/contractor.dart';
 import '../models/worker.dart';
 import '../models/worker_assigned_job.dart';
@@ -13,16 +14,14 @@ import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
+import 'create_worker_availability_screen.dart';
 import 'worker_details_screen.dart';
 import 'worker_widgets.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   final String workerId;
 
-  const WorkerProfileScreen({
-    super.key,
-    required this.workerId,
-  });
+  const WorkerProfileScreen({super.key, required this.workerId});
 
   @override
   State<WorkerProfileScreen> createState() => _WorkerProfileScreenState();
@@ -40,6 +39,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
   final Map<String, String> _jobStatusOverrides = {};
   final Set<String> _jobActionInProgress = {};
+  bool _hasAvailability = false;
   final Map<String, Contractor?> _contractorCache = {};
   final Set<String> _loadingContractorIds = {};
 
@@ -57,26 +57,50 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   }
 
   void _loadProfileData() {
+    setState(() {
+      _hasAvailability = false;
+    });
+
     _workerFuture = context.read<WorkerProvider>().getWorker(
-          widget.workerId,
-          accountId: PreferencesService().getAccountId(),
-        );
+      widget.workerId,
+      accountId: PreferencesService().getAccountId(),
+    );
     _pendingJobsFuture = _loadPendingJobs();
     _jobSuggestionsFuture = _loadJobSuggestions();
+    _loadAvailabilities();
+  }
+
+  Future<WorkerAvailabilityResponse> _loadAvailabilities() async {
+    final response = await context
+        .read<WorkerProvider>()
+        .getWorkerAvailabilities(
+          workerId: widget.workerId,
+          accountId: PreferencesService().getAccountId(),
+        );
+
+    if (!mounted) {
+      return response;
+    }
+
+    setState(() {
+      _hasAvailability = response.availabilities.isNotEmpty;
+    });
+
+    return response;
   }
 
   Future<WorkerJobSuggestionResponse> _loadJobSuggestions() {
     return context.read<WorkerProvider>().getWorkerJobSuggestions(
-          workerId: widget.workerId,
-          accountId: PreferencesService().getAccountId(),
-        );
+      workerId: widget.workerId,
+      accountId: PreferencesService().getAccountId(),
+    );
   }
 
   Future<List<WorkerAssignedJob>> _loadPendingJobs() {
     return context.read<WorkerProvider>().getWorkerAssignedJobs(
-          workerId: widget.workerId,
-          accountId: PreferencesService().getAccountId(),
-        );
+      workerId: widget.workerId,
+      accountId: PreferencesService().getAccountId(),
+    );
   }
 
   Future<void> _refreshPendingJobs() async {
@@ -91,6 +115,29 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     });
   }
 
+  Future<bool> _ensureAvailabilityBeforeAction() async {
+    if (_hasAvailability) {
+      return true;
+    }
+
+    final response = await context
+        .read<WorkerProvider>()
+        .getWorkerAvailabilities(
+          workerId: widget.workerId,
+          accountId: PreferencesService().getAccountId(),
+        );
+
+    if (!mounted) {
+      return false;
+    }
+
+    setState(() {
+      _hasAvailability = response.availabilities.isNotEmpty;
+    });
+
+    return _hasAvailability;
+  }
+
   Future<void> _acceptSuggestedJob(WorkerJobSuggestion suggestion) async {
     final accountId = PreferencesService().getAccountId();
     final jobId = suggestion.jobInformation.jobId;
@@ -98,15 +145,31 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Account ID is missing. Please re-login.')),
+          content: Text('Account ID is missing. Please re-login.'),
+        ),
       );
       return;
     }
 
     if (jobId.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid job ID.')));
+      return;
+    }
+
+    final canAccept = await _ensureAvailabilityBeforeAction();
+    if (!mounted) {
+      return;
+    }
+
+    if (!canAccept) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid job ID.')),
+        const SnackBar(
+          content: Text('Add your availability first to accept jobs.'),
+        ),
       );
+      await _openAddAvailability();
       return;
     }
 
@@ -116,10 +179,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
     try {
       await context.read<WorkerProvider>().acceptWorkerJob(
-            workerId: widget.workerId,
-            jobId: jobId,
-            accountId: accountId,
-          );
+        workerId: widget.workerId,
+        jobId: jobId,
+        accountId: accountId,
+      );
 
       if (!mounted) {
         return;
@@ -140,9 +203,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to accept job: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to accept job: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -159,15 +222,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Account ID is missing. Please re-login.')),
+          content: Text('Account ID is missing. Please re-login.'),
+        ),
       );
       return;
     }
 
     if (jobId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid job ID.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid job ID.')));
       return;
     }
 
@@ -177,10 +241,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
     try {
       await context.read<WorkerProvider>().startWorkerJob(
-            workerId: widget.workerId,
-            jobId: jobId,
-            accountId: accountId,
-          );
+        workerId: widget.workerId,
+        jobId: jobId,
+        accountId: accountId,
+      );
 
       if (!mounted) {
         return;
@@ -191,17 +255,17 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         _pendingJobsFuture = _loadPendingJobs();
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Job started successfully')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Job started successfully')));
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to start job: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to start job: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -218,15 +282,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Account ID is missing. Please re-login.')),
+          content: Text('Account ID is missing. Please re-login.'),
+        ),
       );
       return;
     }
 
     if (jobId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid job ID.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid job ID.')));
       return;
     }
 
@@ -236,10 +301,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
     try {
       await context.read<WorkerProvider>().completeWorkerJobSuccess(
-            workerId: widget.workerId,
-            jobId: jobId,
-            accountId: accountId,
-          );
+        workerId: widget.workerId,
+        jobId: jobId,
+        accountId: accountId,
+      );
 
       if (!mounted) {
         return;
@@ -258,9 +323,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to complete job: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to complete job: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -277,15 +342,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Account ID is missing. Please re-login.')),
+          content: Text('Account ID is missing. Please re-login.'),
+        ),
       );
       return;
     }
 
     if (jobId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid job ID.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid job ID.')));
       return;
     }
 
@@ -295,10 +361,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
     try {
       await context.read<WorkerProvider>().startWorkerJob(
-            workerId: widget.workerId,
-            jobId: jobId,
-            accountId: accountId,
-          );
+        workerId: widget.workerId,
+        jobId: jobId,
+        accountId: accountId,
+      );
 
       if (!mounted) {
         return;
@@ -309,17 +375,17 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         _pendingJobsFuture = _loadPendingJobs();
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Job started successfully')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Job started successfully')));
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to start job: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to start job: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -336,15 +402,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Account ID is missing. Please re-login.')),
+          content: Text('Account ID is missing. Please re-login.'),
+        ),
       );
       return;
     }
 
     if (jobId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid job ID.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid job ID.')));
       return;
     }
 
@@ -354,10 +421,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
     try {
       await context.read<WorkerProvider>().completeWorkerJobSuccess(
-            workerId: widget.workerId,
-            jobId: jobId,
-            accountId: accountId,
-          );
+        workerId: widget.workerId,
+        jobId: jobId,
+        accountId: accountId,
+      );
 
       if (!mounted) {
         return;
@@ -376,9 +443,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to complete job: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to complete job: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -453,6 +520,21 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         .then((_) => setState(_loadProfileData));
   }
 
+  Future<void> _openAddAvailability() async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) =>
+            CreateWorkerAvailabilityScreen(workerId: widget.workerId),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result == true) {
+      setState(_loadProfileData);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -470,8 +552,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                 children: [
                   Icon(Icons.error_outline, size: 48, color: AppColors.red),
                   const SizedBox(height: 16),
-                  Text('Error: ${snapshot.error}',
-                      style: const TextStyle(color: AppColors.text2)),
+                  Text(
+                    'Error: ${snapshot.error}',
+                    style: const TextStyle(color: AppColors.text2),
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => setState(_loadProfileData),
@@ -494,7 +578,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                        context, '/home', (_) => false),
+                      context,
+                      '/home',
+                      (_) => false,
+                    ),
                     child: const Text('Go to Home'),
                   ),
                 ],
@@ -509,9 +596,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                   child: FutureBuilder<List<WorkerAssignedJob>>(
                     future: _pendingJobsFuture,
                     builder: (context, pendingSnap) {
-                      final status =
-                          _resolveWorkerOverallStatus(pendingSnap);
-                      return _buildGradientHeader(worker, status);
+                      final status = _resolveWorkerOverallStatus(pendingSnap);
+                      return _buildGradientHeader(
+                        worker,
+                        status,
+                        _hasAvailability,
+                      );
                     },
                   ),
                 ),
@@ -535,10 +625,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             },
             body: TabBarView(
               controller: _tabController,
-              children: [
-                _buildSuggestedJobsTab(),
-                _buildPendingJobsTab(),
-              ],
+              children: [_buildSuggestedJobsTab(), _buildPendingJobsTab()],
             ),
           );
         },
@@ -546,7 +633,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
-  Widget _buildGradientHeader(Worker worker, String status) {
+  Widget _buildGradientHeader(
+    Worker worker,
+    String status,
+    bool hasAvailability,
+  ) {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -579,32 +670,81 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                   ),
                   const Spacer(),
                   GestureDetector(
+                    onTap: _openAddAvailability,
+                    child: const Icon(
+                      Icons.event_available_outlined,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  GestureDetector(
                     onTap: _openWorkerDetails,
                     child: const Icon(Icons.edit_outlined, color: Colors.white),
                   ),
                 ],
               ),
               const SizedBox(height: 20),
-              // Profile info
-              Row(
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      hasAvailability
+                          ? Icons.check_circle_outline
+                          : Icons.warning_amber_rounded,
+                      color: Colors.white,
+                      size: 18,
                     ),
-                    child: Center(
+                    const SizedBox(width: 10),
+                    Expanded(
                       child: Text(
-                        _workerInitial(worker.workerName),
+                        hasAvailability
+                            ? 'Availability is set. You can accept and manage jobs.'
+                            : 'Add your availability to unlock job acceptance.',
                         style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
                           color: Colors.white,
                         ),
                       ),
                     ),
+                    if (!hasAvailability)
+                      TextButton.icon(
+                        onPressed: _openAddAvailability,
+                        icon: const Icon(
+                          Icons.add,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                        label: const Text(
+                          'Add Availability',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.white.withValues(alpha: 0.12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Profile info
+              Row(
+                children: [
+                  ProfileAvatar(
+                    id: worker.id,
+                    isWorker: true,
+                    radius: 28,
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -627,7 +767,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                             if (worker.categories.isNotEmpty)
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(20),
@@ -655,7 +797,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   }
 
   Widget _buildSuggestedJobsTab() {
-                return FutureBuilder<WorkerJobSuggestionResponse>(
+    return FutureBuilder<WorkerJobSuggestionResponse>(
       future: _jobSuggestionsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -706,8 +848,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           );
         }
 
-        final pendingJobs =
-            (snapshot.data ?? []).where(_isPendingAssignedJob).toList();
+        final pendingJobs = (snapshot.data ?? [])
+            .where(_isPendingAssignedJob)
+            .toList();
 
         if (pendingJobs.isEmpty) {
           return _buildEmptyState(
@@ -739,15 +882,20 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           children: [
             Icon(icon, size: 48, color: AppColors.gray4),
             const SizedBox(height: 16),
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, color: AppColors.text2)),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AppColors.text2),
+            ),
           ],
         ),
       ),
@@ -777,8 +925,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final status = _resolvePendingJobStatus(job);
     _loadContractorContactIfNeeded(job.contractorId);
     final contractor = _contractorCache[job.contractorId];
-    final isContractorLoading =
-        _loadingContractorIds.contains(job.contractorId);
+    final isContractorLoading = _loadingContractorIds.contains(
+      job.contractorId,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -794,7 +943,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           children: [
             Row(
               children: [
-                ProfileAvatar(id: job.contractorId, isWorker: false, radius: 18),
+                ProfileAvatar(
+                  id: job.contractorId,
+                  isWorker: false,
+                  radius: 18,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -813,18 +966,30 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             // Job images (tap to cycle through available images)
             JobImagesWidget(jobId: job.jobId, height: 160),
             const SizedBox(height: 12),
-            _buildDetailRow(Icons.business, 'Contractor',
-                job.contractorName.isEmpty ? 'N/A' : job.contractorName),
             _buildDetailRow(
-                Icons.phone,
-                'Phone',
-                isContractorLoading
-                    ? 'Loading...'
-                    : _resolveContractorPhone(contractor)),
+              Icons.business,
+              'Contractor',
+              job.contractorName.isEmpty ? 'N/A' : job.contractorName,
+            ),
             _buildDetailRow(
-                Icons.schedule, 'Start', _formatAssignedJobStartTime(job)),
+              Icons.phone,
+              'Phone',
+              isContractorLoading
+                  ? 'Loading...'
+                  : _resolveContractorPhone(contractor),
+            ),
+            _buildDetailRow(
+              Icons.schedule,
+              'Start',
+              _formatAssignedJobStartTime(job),
+            ),
             _buildDetailRow(Icons.timer, 'Duration', '${job.duration}h'),
-            _buildAddressRow(Icons.location_on, 'Location', job.latitude, job.longitude),
+            _buildAddressRow(
+              Icons.location_on,
+              'Location',
+              job.latitude,
+              job.longitude,
+            ),
             const SizedBox(height: 10),
             _buildPendingJobActionButtons(job: job, status: status),
           ],
@@ -884,14 +1049,22 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     }
 
     final contractor = _contractorCache[job.contractorId];
-    final isContractorLoading =
-        _loadingContractorIds.contains(job.contractorId);
+    final isContractorLoading = _loadingContractorIds.contains(
+      job.contractorId,
+    );
 
-    final workerPoint = LatLng(workerInfo.workerLatitude, workerInfo.workerLongitude);
+    final workerPoint = LatLng(
+      workerInfo.workerLatitude,
+      workerInfo.workerLongitude,
+    );
     final jobPoint = LatLng(job.jobLatitude, job.jobLongitude);
-    final distanceKm = _distance.as(LengthUnit.Kilometer, workerPoint, jobPoint);
+    final distanceKm = _distance.as(
+      LengthUnit.Kilometer,
+      workerPoint,
+      jobPoint,
+    );
 
-                    return Container(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -905,15 +1078,21 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           children: [
             Row(
               children: [
-                                const SizedBox(width: 4),
-                                ProfileAvatar(id: job.contractorId, isWorker: false, radius: 18),
+                const SizedBox(width: 4),
+                ProfileAvatar(
+                  id: job.contractorId,
+                  isWorker: false,
+                  radius: 18,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        job.jobCategory.isEmpty ? 'Job #$index' : job.jobCategory,
+                        job.jobCategory.isEmpty
+                            ? 'Job #$index'
+                            : job.jobCategory,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -921,8 +1100,13 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                         ),
                       ),
                       Text(
-                        job.contractorCompany.isEmpty ? 'Unknown' : job.contractorCompany,
-                        style: const TextStyle(fontSize: 12, color: AppColors.text2),
+                        job.contractorCompany.isEmpty
+                            ? 'Unknown'
+                            : job.contractorCompany,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.text2,
+                        ),
                       ),
                     ],
                   ),
@@ -931,16 +1115,35 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               ],
             ),
             const SizedBox(height: 12),
-          // Job images for suggestion (interactive)
-          JobImagesWidget(jobId: job.jobId, height: 150),
-          const SizedBox(height: 12),
-          _buildDetailRow(Icons.schedule, 'Start', _formatSuggestedJobStartTime(job)),
-            _buildDetailRow(Icons.timer, 'Duration', '${job.jobDurationHours}h'),
-            _buildDetailRow(Icons.alt_route, 'Distance', '${distanceKm.toStringAsFixed(1)} km'),
-            _buildAddressRow(Icons.location_on, 'Location', job.jobLatitude, job.jobLongitude),
+            _buildDetailRow(
+              Icons.schedule,
+              'Start',
+              _formatSuggestedJobStartTime(job),
+            ),
+            _buildDetailRow(
+              Icons.timer,
+              'Duration',
+              '${job.jobDurationHours}h',
+            ),
+            _buildDetailRow(
+              Icons.alt_route,
+              'Distance',
+              '${distanceKm.toStringAsFixed(1)} km',
+            ),
+            _buildAddressRow(
+              Icons.location_on,
+              'Location',
+              job.jobLatitude,
+              job.jobLongitude,
+            ),
             if (showContractorAndDirection) ...[
-              _buildDetailRow(Icons.phone, 'Phone',
-                  isContractorLoading ? 'Loading...' : _resolveContractorPhone(contractor)),
+              _buildDetailRow(
+                Icons.phone,
+                'Phone',
+                isContractorLoading
+                    ? 'Loading...'
+                    : _resolveContractorPhone(contractor),
+              ),
               const SizedBox(height: 10),
               SizedBox(
                 height: 150,
@@ -987,7 +1190,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               icon: Icons.check_circle_outline,
               color: AppColors.green,
               isLoading: isInProgress,
-              onPressed: () => _acceptSuggestedJob(suggestion),
+              onPressed: _hasAvailability
+                  ? () => _acceptSuggestedJob(suggestion)
+                  : null,
             ),
           ),
         if (canStart)
@@ -1024,11 +1229,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           Text(
             '$label: ',
             style: const TextStyle(
-                fontSize: 13, color: AppColors.text2, fontWeight: FontWeight.w500),
+              fontSize: 13,
+              color: AppColors.text2,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(fontSize: 13, color: AppColors.text)),
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, color: AppColors.text),
+            ),
           ),
         ],
       ),
@@ -1045,7 +1255,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           Text(
             '$label: ',
             style: const TextStyle(
-                fontSize: 13, color: AppColors.text2, fontWeight: FontWeight.w500),
+              fontSize: 13,
+              color: AppColors.text2,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           Expanded(
             child: FutureBuilder<String>(
@@ -1093,13 +1306,21 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               point: workerPoint,
               width: 36,
               height: 36,
-              child: const Icon(Icons.person_pin_circle, color: Colors.green, size: 36),
+              child: const Icon(
+                Icons.person_pin_circle,
+                color: Colors.green,
+                size: 36,
+              ),
             ),
             Marker(
               point: jobPoint,
               width: 36,
               height: 36,
-              child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
+              child: const Icon(
+                Icons.location_pin,
+                color: Colors.red,
+                size: 36,
+              ),
             ),
           ],
         ),
@@ -1173,12 +1394,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       'REJECTED',
     };
 
-    const terminalJobStatuses = {
-      'SUCCESS',
-      'COMPLETED',
-      'CANCELLED',
-      'FAILED',
-    };
+    const terminalJobStatuses = {'SUCCESS', 'COMPLETED', 'CANCELLED', 'FAILED'};
 
     return !terminalAssignedStatuses.contains(assignedStatus) &&
         !terminalJobStatuses.contains(jobStatus);
@@ -1249,71 +1465,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     return 'N/A';
   }
 
-  Color _getStatusBackgroundColor(String status) {
-    switch (status) {
-      case 'PENDING':
-        return AppColors.orangePale;
-      case 'ACCEPTED':
-        return AppColors.bluePale;
-      case 'STARTED':
-      case 'IN_PROGRESS':
-        return const Color(0xFFE8EAF6);
-      case 'SUCCESS':
-      case 'COMPLETED':
-        return AppColors.greenPale;
-      default:
-        return AppColors.gray1;
-    }
-  }
-
-  Color _getStatusTextColor(String status) {
-    switch (status) {
-      case 'PENDING':
-        return AppColors.orange;
-      case 'ACCEPTED':
-        return AppColors.blue;
-      case 'STARTED':
-      case 'IN_PROGRESS':
-        return const Color(0xFF283593);
-      case 'SUCCESS':
-      case 'COMPLETED':
-        return AppColors.green;
-      default:
-        return AppColors.gray6;
-    }
-  }
-
-  Color _getWorkerStatusBackgroundColor(String status) {
-    switch (status) {
-      case 'BUSY':
-        return const Color(0xFFE8EAF6);
-      case 'ASSIGNED':
-        return AppColors.bluePale;
-      case 'IDLE':
-        return AppColors.greenPale;
-      default:
-        return AppColors.gray1;
-    }
-  }
-
-  Color _getWorkerStatusTextColor(String status) {
-    switch (status) {
-      case 'BUSY':
-        return const Color(0xFF283593);
-      case 'ASSIGNED':
-        return AppColors.blue;
-      case 'IDLE':
-        return AppColors.green;
-      default:
-        return AppColors.gray6;
-    }
-  }
-
   String _workerInitial(String workerName) {
     final trimmed = workerName.trim();
     if (trimmed.isEmpty) return 'W';
     return trimmed[0].toUpperCase();
   }
 }
-
-

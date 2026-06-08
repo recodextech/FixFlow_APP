@@ -66,6 +66,7 @@ class WorkerProvider extends ChangeNotifier {
     required String email,
     required String phoneNumber,
     required List<String> workerCategories,
+    String? photoBase64,
   }) async {
     _isLoading = true;
     _error = null;
@@ -79,6 +80,7 @@ class WorkerProvider extends ChangeNotifier {
         email: email,
         phoneNumber: phoneNumber,
         workerCategories: workerCategories,
+        photoBase64: photoBase64,
       );
       _error = null;
       return result;

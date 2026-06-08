@@ -14,10 +14,7 @@ import 'location_picker_screen.dart';
 class CreateWorkerAvailabilityScreen extends StatefulWidget {
   final String workerId;
 
-  const CreateWorkerAvailabilityScreen({
-    super.key,
-    required this.workerId,
-  });
+  const CreateWorkerAvailabilityScreen({super.key, required this.workerId});
 
   @override
   State<CreateWorkerAvailabilityScreen> createState() =>
@@ -37,15 +34,14 @@ class _CreateWorkerAvailabilityScreenState
   DateTime? _endDate;
   String _frequency = 'weekly';
   bool _isSubmitting = false;
-  final List<_TimeWindowDraft> _timeWindows = [
-    _TimeWindowDraft(duration: 1),
-  ];
+  final List<_TimeWindowDraft> _timeWindows = [_TimeWindowDraft(duration: 1)];
 
   Future<void> _openLocationPicker() async {
     final result = await Navigator.push<LatLng>(
       context,
       MaterialPageRoute(
-        builder: (_) => LocationPickerScreen(initialLocation: _selectedLocation),
+        builder: (_) =>
+            LocationPickerScreen(initialLocation: _selectedLocation),
       ),
     );
     if (result != null) {
@@ -61,9 +57,10 @@ class _CreateWorkerAvailabilityScreenState
         'https://nominatim.openstreetmap.org/reverse'
         '?lat=${point.latitude}&lon=${point.longitude}&format=json',
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'fixflow_app/1.0',
-      });
+      final response = await http.get(
+        uri,
+        headers: {'User-Agent': 'fixflow_app/1.0'},
+      );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final display = data['display_name'] as String?;
@@ -136,7 +133,8 @@ class _CreateWorkerAvailabilityScreenState
   }
 
   Future<void> _pickTimeWindowStart(int index) async {
-    final current = _timeWindows[index].startTime ?? const TimeOfDay(hour: 9, minute: 0);
+    final current =
+        _timeWindows[index].startTime ?? const TimeOfDay(hour: 9, minute: 0);
     final selectedTime = await showTimePicker(
       context: context,
       initialTime: current,
@@ -161,6 +159,24 @@ class _CreateWorkerAvailabilityScreenState
     setState(() {
       _timeWindows.removeAt(index);
     });
+  }
+
+  bool get _canCreateAvailability {
+    if (_isSubmitting) return false;
+    if (_startDate == null || _endDate == null) return false;
+    if (_endDate!.isBefore(_startDate!)) return false;
+    if (_frequency.isEmpty) return false;
+
+    for (final window in _timeWindows) {
+      final startTime = window.startTime;
+      if (startTime == null) return false;
+      if (window.duration <= 0) return false;
+
+      final maxHours = _maxDurationHoursForStart(startTime);
+      if (maxHours < 1 || window.duration > maxHours) return false;
+    }
+
+    return true;
   }
 
   String? _validateForm() {
@@ -203,9 +219,9 @@ class _CreateWorkerAvailabilityScreenState
   Future<void> _submit() async {
     final validationError = _validateForm();
     if (validationError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(validationError)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationError)));
       return;
     }
 
@@ -213,7 +229,8 @@ class _CreateWorkerAvailabilityScreenState
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Account ID is missing. Please re-login.')),
+          content: Text('Account ID is missing. Please re-login.'),
+        ),
       );
       return;
     }
@@ -242,10 +259,10 @@ class _CreateWorkerAvailabilityScreenState
 
     try {
       await context.read<WorkerProvider>().createWorkerAvailability(
-            workerId: widget.workerId,
-            accountId: accountId,
-            request: request,
-          );
+        workerId: widget.workerId,
+        accountId: accountId,
+        request: request,
+      );
 
       if (!mounted) return;
 
@@ -277,7 +294,10 @@ class _CreateWorkerAvailabilityScreenState
           IconButton(
             icon: const Icon(Icons.home_outlined),
             onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                context, '/home', (route) => false),
+              context,
+              '/home',
+              (route) => false,
+            ),
           ),
         ],
       ),
@@ -311,7 +331,8 @@ class _CreateWorkerAvailabilityScreenState
                             TileLayer(
                               urlTemplate:
                                   'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName: 'com.recodextech.fixflow_app',
+                              userAgentPackageName:
+                                  'com.recodextech.fixflow_app',
                             ),
                             MarkerLayer(
                               markers: [
@@ -335,7 +356,10 @@ class _CreateWorkerAvailabilityScreenState
                         left: 8,
                         right: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black54,
                             borderRadius: BorderRadius.circular(6),
@@ -343,11 +367,18 @@ class _CreateWorkerAvailabilityScreenState
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.touch_app, color: Colors.white, size: 16),
+                              Icon(
+                                Icons.touch_app,
+                                color: Colors.white,
+                                size: 16,
+                              ),
                               SizedBox(width: 6),
                               Text(
                                 'Tap to pick location',
-                                style: TextStyle(color: Colors.white, fontSize: 12),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
                           ),
@@ -365,8 +396,10 @@ class _CreateWorkerAvailabilityScreenState
                 const SizedBox(width: 6),
                 Expanded(
                   child: _isLoadingAddress
-                      ? const Text('Looking up address...',
-                          style: TextStyle(color: Colors.grey, fontSize: 13))
+                      ? const Text(
+                          'Looking up address...',
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        )
                       : Text(
                           _selectedAddress,
                           style: const TextStyle(fontSize: 13),
@@ -411,7 +444,7 @@ class _CreateWorkerAvailabilityScreenState
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _frequency,
+              initialValue: _frequency,
               decoration: const InputDecoration(
                 labelText: 'Frequency',
                 border: OutlineInputBorder(),
@@ -483,8 +516,9 @@ class _CreateWorkerAvailabilityScreenState
                       const SizedBox(height: 12),
                       Builder(
                         builder: (context) {
-                          final maxHours =
-                              _effectiveMaxDurationHours(window.startTime);
+                          final maxHours = _effectiveMaxDurationHours(
+                            window.startTime,
+                          );
                           if (maxHours < 1) {
                             return Text(
                               'Not enough time before midnight for this start time. Pick an earlier start.',
@@ -503,11 +537,12 @@ class _CreateWorkerAvailabilityScreenState
                             });
                           }
                           return DropdownButtonFormField<int>(
-                            value: window.duration > maxHours
+                            initialValue: window.duration > maxHours
                                 ? maxHours
                                 : window.duration,
                             decoration: const InputDecoration(
-                              labelText: 'Duration (hours, until midnight, max 12)',
+                              labelText:
+                                  'Duration (hours, until midnight, max 12)',
                               border: OutlineInputBorder(),
                             ),
                             items: List.generate(
@@ -537,7 +572,7 @@ class _CreateWorkerAvailabilityScreenState
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _isSubmitting ? null : _submit,
+                onPressed: _canCreateAvailability ? _submit : null,
                 icon: const Icon(Icons.check),
                 label: _isSubmitting
                     ? const SizedBox(
@@ -545,7 +580,11 @@ class _CreateWorkerAvailabilityScreenState
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Create Availability'),
+                    : Text(
+                        _canCreateAvailability
+                            ? 'Create Availability'
+                            : 'Complete required fields',
+                      ),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -562,7 +601,5 @@ class _TimeWindowDraft {
   TimeOfDay? startTime;
   int duration;
 
-  _TimeWindowDraft({
-    required this.duration,
-  });
+  _TimeWindowDraft({required this.duration});
 }

@@ -45,12 +45,9 @@ class AuthService {
         ),
       );
 
-      print('Result: $result');
-
       if (result == null) {
         return false;
       }
-      print('Access token: ${result?.accessToken}');
 
       final accessToken = result.accessToken;
       if (accessToken == null) {

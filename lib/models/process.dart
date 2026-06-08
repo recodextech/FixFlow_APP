@@ -6,19 +6,16 @@ import 'job.dart';
 
 class ProcessRequest {
   final String name;
-  final String description;
   final List<Job> jobs;
 
   ProcessRequest({
     required this.name,
-    required this.description,
     required this.jobs,
   });
 
   factory ProcessRequest.fromJson(Map<String, dynamic> json) {
     return ProcessRequest(
       name: json['name'] ?? '',
-      description: json['description'] ?? '',
       jobs: (json['jobs'] as List<dynamic>?)
               ?.map((j) => Job.fromJson(j as Map<String, dynamic>))
               .toList() ??
@@ -29,7 +26,6 @@ class ProcessRequest {
   Map<String, dynamic> toJson() {
     return {
       'name': name,
-      'description': description,
       'jobs': jobs.map((j) => j.toJson()).toList(),
     };
   }

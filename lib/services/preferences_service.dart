@@ -33,18 +33,29 @@ class PreferencesService {
   }) {
     _userId = userId;
 
-    final savedWorkerPhoto = _prefs.getString(_workerPhotoKey);
-    final savedContractorPhoto = _prefs.getString(_contractorPhotoKey);
+    if (worker != null) {
+      _worker = worker;
+      if (worker.photoBase64 != null && worker.photoBase64!.isNotEmpty) {
+        _prefs.setString(_workerPhotoKey, worker.photoBase64!);
+      } else {
+        _prefs.remove(_workerPhotoKey);
+      }
+    } else {
+      _worker = null;
+      _prefs.remove(_workerPhotoKey);
+    }
 
-    _worker = worker == null
-        ? _worker
-        : worker.copyWith(photoBase64: worker.photoBase64 ?? savedWorkerPhoto);
-
-    _contractor = contractor == null
-        ? _contractor
-        : contractor.copyWith(
-            photoBase64: contractor.photoBase64 ?? savedContractorPhoto,
-          );
+    if (contractor != null) {
+      _contractor = contractor;
+      if (contractor.photoBase64 != null && contractor.photoBase64!.isNotEmpty) {
+        _prefs.setString(_contractorPhotoKey, contractor.photoBase64!);
+      } else {
+        _prefs.remove(_contractorPhotoKey);
+      }
+    } else {
+      _contractor = null;
+      _prefs.remove(_contractorPhotoKey);
+    }
   }
 
   void setWorkerData(Worker worker) {

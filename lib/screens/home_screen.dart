@@ -133,9 +133,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Worker Card
                 _RoleCard(
                   icon: Icons.groups_rounded,
-                  title: 'I am a Worker',
+                  title: hasWorker ? (workerName ?? 'Worker Profile') : 'Worker Profile',
                   subtitle: hasWorker
-                      ? workerName ?? 'Worker profile'
+                      ? 'Continue to your worker profile'
                       : 'Create your worker profile',
                   buttonLabel:
                       hasWorker ? 'Continue as Worker' : 'Create Worker Profile',
@@ -148,9 +148,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Contractor Card
                 _RoleCard(
                   icon: Icons.apartment_rounded,
-                  title: 'I am a Contractor',
+                  title: hasContractor
+                      ? (contractorName ?? 'Contractor Profile')
+                      : 'Contractor Profile',
                   subtitle: hasContractor
-                      ? contractorName ?? 'Contractor profile'
+                      ? 'Continue to your contractor profile'
                       : 'Create your contractor profile',
                   buttonLabel: hasContractor
                       ? 'Continue as Contractor'
@@ -258,6 +260,9 @@ class _RoleCard extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
@@ -268,6 +273,8 @@ class _RoleCard extends StatelessWidget {
             Text(
               subtitle,
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.white.withValues(alpha: 0.85),

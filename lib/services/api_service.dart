@@ -163,13 +163,14 @@ class ApiService {
     required String email,
     required String phoneNumber,
     required List<String> workerCategories,
+    String? photoBase64,
   }) async {
     try {
       final payload = {
-        'workerName': workerName,
         'email': email,
         'phoneNumber': phoneNumber,
-        'workerCategories': workerCategories,
+        if (photoBase64 != null && photoBase64.isNotEmpty)
+          'profilePicture': photoBase64,
       };
 
       final response = await http.patch(
@@ -588,17 +589,18 @@ class ApiService {
     required String contractorType,
     required String email,
     required String phoneNumber,
+    String? photoBase64,
   }) async {
     try {
       final payload = {
-        'contractorName': contractorName,
-        'contractorType': contractorType,
         'email': email,
         'phoneNumber': phoneNumber,
+        if (photoBase64 != null && photoBase64.isNotEmpty)
+          'profilePicture': photoBase64,
       };
 
       final response = await http.patch(
-        Uri.parse('$_gatewayUrl$_managementPath/contractors/$contractorId'),
+        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId'),
         headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
@@ -801,6 +803,32 @@ class ApiService {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } catch (e) {
       print('Error creating contractor process: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete a contractor process
+  Future<void> deleteContractorProcess({
+    required String contractorId,
+    required String processId,
+    required String accountId,
+  }) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/processes/$processId'),
+        headers: await _getHeaders(
+          accountId: accountId,
+          traceId: _buildTraceId(),
+        ),
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception(
+          'Failed to delete process: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error deleting contractor process: $e');
       rethrow;
     }
   }

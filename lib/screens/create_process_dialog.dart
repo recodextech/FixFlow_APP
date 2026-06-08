@@ -1,5 +1,4 @@
 import 'dart:math' show min;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,10 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/process.dart';
-import '../models/wallet.dart';
 import '../models/worker.dart';
 import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
+import '../theme.dart';
 import 'location_picker_screen.dart';
 
 class CreateProcessDialog extends StatefulWidget {
@@ -34,7 +33,6 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
   final _formKey = GlobalKey<FormState>();
   final _processNameController = TextEditingController();
-  final _processDescriptionController = TextEditingController();
 
   // Job fields
   final _jobDescriptionController = TextEditingController();
@@ -43,7 +41,6 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   final _amountController = TextEditingController();
 
   late Future<List<Category>> _categoriesFuture;
-  late Future<List<Wallet>> _walletsFuture;
   String? _selectedCategory;
   String? _selectedWalletId;
   bool _isSubmitting = false;
@@ -55,21 +52,23 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   void initState() {
     super.initState();
     _categoriesFuture = ApiService().getCategories(accountId: widget.accountId);
-    _walletsFuture = _loadCashWallet();
+    _loadCashWallet();
   }
 
-  Future<List<Wallet>> _loadCashWallet() async {
+  Future<void> _loadCashWallet() async {
     final wallets = await ApiService().getWallets(accountId: widget.accountId);
     final cashWallet = wallets.firstWhere(
       (w) => w.type.toUpperCase() == 'CASH',
-      orElse: () => wallets.isNotEmpty ? wallets.first : Wallet(
-        id: '',
-        type: 'CASH',
-        balance: 0.0,
-      ),
+      orElse: () => wallets.isNotEmpty
+          ? wallets.first
+          : Wallet(id: '', type: 'CASH', balance: 0.0),
     );
-    _selectedWalletId = cashWallet.id;
-    return [cashWallet];
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedWalletId = cashWallet.id;
+    });
   }
 
   /// Whole hours from [start] until midnight (end of that calendar day), capped at 12.
@@ -140,7 +139,6 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
       final processRequest = ProcessRequest(
         name: _processNameController.text.trim(),
-        description: _processDescriptionController.text.trim(),
         jobs: [job],
       );
 
@@ -203,6 +201,26 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     });
   }
 
+  bool get _canCreateJob {
+    final hasJobName = _processNameController.text.trim().isNotEmpty;
+    final hasDescription = _jobDescriptionController.text.trim().isNotEmpty;
+    final hasStartTime = _startTimeController.text.trim().isNotEmpty;
+    final hasDuration = int.tryParse(_durationController.text.trim()) != null &&
+        int.parse(_durationController.text.trim()) > 0;
+    final hasCategory = _selectedCategory != null && _selectedCategory!.isNotEmpty;
+    final hasWallet = _selectedWalletId != null && _selectedWalletId!.isNotEmpty;
+    final hasAmount = double.tryParse(_amountController.text.trim()) != null &&
+        double.parse(_amountController.text.trim()) > 0;
+
+    return hasJobName &&
+        hasDescription &&
+        hasStartTime &&
+        hasDuration &&
+        hasCategory &&
+        hasWallet &&
+        hasAmount;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -220,11 +238,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                 children: [
                   _buildHeader(),
                   const SizedBox(height: 16),
-                  _buildSectionLabel('Process Information'),
-                  const SizedBox(height: 12),
-                  _buildProcessFields(),
-                  const SizedBox(height: 20),
-                  _buildSectionLabel('Job Information'),
+                  _buildSectionLabel('Job Details'),
                   const SizedBox(height: 12),
                   _buildJobFields(),
                   const SizedBox(height: 16),
@@ -236,9 +250,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                   const SizedBox(height: 12),
                   _buildCategoryDropdown(),
                   const SizedBox(height: 20),
-                  _buildSectionLabel('Payment Information'),
-                  const SizedBox(height: 12),
-                  _buildWalletDropdown(),
+                  _buildSectionLabel('Payment Details'),
                   const SizedBox(height: 12),
                   _buildAmountField(),
                   const SizedBox(height: 24),
@@ -254,7 +266,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
   Widget _buildHeader() {
     return const Text(
-      'Create Process',
+      'Create Job',
       style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
     );
   }
@@ -267,36 +279,19 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     );
   }
 
-  Widget _buildProcessFields() {
+  Widget _buildJobFields() {
     return Column(
       children: [
         TextFormField(
           controller: _processNameController,
           decoration: const InputDecoration(
-            labelText: 'Process Name',
+            labelText: 'Job Name',
             border: OutlineInputBorder(),
           ),
           validator: (value) =>
-              (value == null || value.trim().isEmpty) ? 'Please enter process name' : null,
+              (value == null || value.trim().isEmpty) ? 'Please enter job name' : null,
         ),
         const SizedBox(height: 12),
-        TextFormField(
-          controller: _processDescriptionController,
-          decoration: const InputDecoration(
-            labelText: 'Process Description',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 2,
-          validator: (value) =>
-              (value == null || value.trim().isEmpty) ? 'Please enter description' : null,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildJobFields() {
-    return Column(
-      children: [
         TextFormField(
           controller: _jobDescriptionController,
           decoration: const InputDecoration(
@@ -310,15 +305,17 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         const SizedBox(height: 12),
         TextFormField(
           controller: _startTimeController,
+          readOnly: true,
           decoration: InputDecoration(
             labelText: 'Start Time',
-            hintText: 'YYYY-MM-DDTHH:MM',
+            hintText: 'Pick date and time from calendar',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.calendar_today),
               onPressed: _selectStartTime,
             ),
           ),
+          onTap: _selectStartTime,
           onChanged: (_) {
             setState(_clampDurationToJobStart);
           },
@@ -370,7 +367,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
             final value = (int.tryParse(_durationController.text.trim()) ?? 1)
                 .clamp(1, maxHours);
             return DropdownButtonFormField<int>(
-              value: value,
+              initialValue: value,
               decoration: const InputDecoration(
                 labelText: 'Duration (hours, until midnight, max 12)',
                 border: OutlineInputBorder(),
@@ -640,13 +637,13 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         }
 
         return DropdownButtonFormField<String>(
+          initialValue: _selectedCategory,
           decoration: InputDecoration(
-            labelText: 'Select Category',
+            labelText: 'Select Job Category',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             prefixIcon: const Icon(Icons.category),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
-          value: _selectedCategory,
           isExpanded: true,
           items: categories
               .map((cat) => DropdownMenuItem<String>(
@@ -661,44 +658,6 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
           validator: (value) =>
               (value == null || value.isEmpty) ? 'Please select a category' : null,
           dropdownColor: Theme.of(context).colorScheme.surface,
-        );
-      },
-    );
-  }
-
-  Widget _buildWalletDropdown() {
-    return FutureBuilder<List<Wallet>>(
-      future: _walletsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-              height: 60, child: Center(child: CircularProgressIndicator()));
-        }
-        if (snapshot.hasError) {
-          return Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text('Error loading payment method: ${snapshot.error}'));
-        }
-
-        final wallet = (snapshot.data ?? []).isNotEmpty ? snapshot.data!.first : null;
-        if (wallet == null) {
-          return const Padding(
-              padding: EdgeInsets.all(8),
-              child: Text('No CASH wallet available'));
-        }
-
-        return TextFormField(
-          enabled: false,
-          decoration: InputDecoration(
-            labelText: 'Payment Method',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            prefixIcon: Icon(wallet.icon, color: wallet.iconColor),
-            filled: true,
-            fillColor: Colors.grey[100],
-          ),
-          controller: TextEditingController(
-            text: '${wallet.displayName} - \$${wallet.balance.toStringAsFixed(2)}',
-          ),
         );
       },
     );
@@ -737,14 +696,24 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         ),
         const SizedBox(width: 12),
         ElevatedButton(
-          onPressed: _isSubmitting ? null : _submitProcess,
+          onPressed: (_isSubmitting || !_canCreateJob) ? null : _submitProcess,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _canCreateJob ? AppColors.green : Colors.grey.shade400,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: Colors.grey.shade300,
+            disabledForegroundColor: Colors.white70,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          ),
           child: _isSubmitting
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
-              : const Text('Create Process'),
+              : Text(_canCreateJob ? 'Create Job' : 'Complete required fields'),
         ),
       ],
     );
@@ -753,7 +722,6 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   @override
   void dispose() {
     _processNameController.dispose();
-    _processDescriptionController.dispose();
     _jobDescriptionController.dispose();
     _startTimeController.dispose();
     _durationController.dispose();

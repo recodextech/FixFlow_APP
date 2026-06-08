@@ -159,18 +159,19 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final updated = await context.read<WorkerProvider>().updateWorker(
-        workerId: widget.workerId,
-        accountId: accountId,
-        workerName: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
-        workerCategories: worker.workerCategories,
-      );
-
       final currentPhoto = _selectedPhotoBytes == null
-          ? PreferencesService().getWorkerPhotoBase64()
+          ? PreferencesService().getWorkerPhotoBase64() ?? worker.photoBase64
           : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
+
+      final updated = await context.read<WorkerProvider>().updateWorker(
+            workerId: widget.workerId,
+            accountId: accountId,
+            workerName: _nameController.text.trim(),
+            email: _emailController.text.trim(),
+            phoneNumber: _phoneController.text.trim(),
+            workerCategories: worker.workerCategories,
+            photoBase64: _selectedPhotoBytes != null ? currentPhoto : null,
+          );
 
       PreferencesService().setWorkerData(
         updated.copyWith(photoBase64: currentPhoto),
