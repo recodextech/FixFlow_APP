@@ -288,6 +288,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
             labelText: 'Job Name',
             border: OutlineInputBorder(),
           ),
+          onChanged: (_) => setState(() {}),
           validator: (value) =>
               (value == null || value.trim().isEmpty) ? 'Please enter job name' : null,
         ),
@@ -299,6 +300,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
             border: OutlineInputBorder(),
           ),
           maxLines: 2,
+          onChanged: (_) => setState(() {}),
           validator: (value) =>
               (value == null || value.trim().isEmpty) ? 'Please enter job description' : null,
         ),
@@ -316,9 +318,6 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
             ),
           ),
           onTap: _selectStartTime,
-          onChanged: (_) {
-            setState(_clampDurationToJobStart);
-          },
           validator: (value) {
             if (value == null || value.trim().isEmpty) return 'Please enter start time';
             final trimmed = value.trim();
@@ -701,7 +700,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
             backgroundColor: _canCreateJob ? AppColors.green : Colors.grey.shade400,
             foregroundColor: Colors.white,
             disabledBackgroundColor: Colors.grey.shade300,
-            disabledForegroundColor: Colors.white70,
+            disabledForegroundColor: Colors.black38,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
