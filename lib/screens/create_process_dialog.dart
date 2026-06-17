@@ -29,7 +29,7 @@ class CreateProcessDialog extends StatefulWidget {
 class _CreateProcessDialogState extends State<CreateProcessDialog> {
   static const LatLng _defaultLocation = LatLng(6.927079, 79.861244);
   static final RegExp _jobStartFormat =
-      RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$');
+      RegExp(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$');
 
   final _formKey = GlobalKey<FormState>();
   final _processNameController = TextEditingController();
@@ -194,7 +194,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     setState(() {
       _startTimeController.text = '${dateTime.year.toString().padLeft(4, '0')}-'
           '${dateTime.month.toString().padLeft(2, '0')}-'
-          '${dateTime.day.toString().padLeft(2, '0')}T'
+          '${dateTime.day.toString().padLeft(2, '0')} '
           '${dateTime.hour.toString().padLeft(2, '0')}:'
           '${dateTime.minute.toString().padLeft(2, '0')}';
       _clampDurationToJobStart();

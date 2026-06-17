@@ -48,6 +48,7 @@ class SuggestedJobInformation {
   final String contractorId;
   final String contractorCompany;
   final String processId;
+  final double jobPaymentAmount;
 
   const SuggestedJobInformation({
     required this.jobId,
@@ -61,6 +62,7 @@ class SuggestedJobInformation {
     required this.contractorId,
     required this.contractorCompany,
     required this.processId,
+    required this.jobPaymentAmount,
   });
 
   factory SuggestedJobInformation.fromJson(Map<String, dynamic> json) {
@@ -81,6 +83,7 @@ class SuggestedJobInformation {
       contractorId: (json['contractorId'] ?? '').toString(),
       contractorCompany: (json['contractorCompany'] ?? '').toString(),
       processId: (json['processId'] ?? '').toString(),
+      jobPaymentAmount: _toDouble(json['jobPaymentAmount']),
     );
   }
 }

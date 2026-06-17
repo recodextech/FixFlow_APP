@@ -11,10 +11,14 @@ class WorkerProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   List<Category> _categories = [];
+  List<WorkerJobSuggestion> _suggestedJobs = [];
+  List<WorkerAssignedJob> _assignedJobs = [];
 
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Category> get categories => _categories;
+  List<WorkerJobSuggestion> get suggestedJobs => _suggestedJobs;
+  List<WorkerAssignedJob> get assignedJobs => _assignedJobs;
 
   /// Fetch categories
   Future<void> fetchCategories() async {
@@ -154,10 +158,13 @@ class WorkerProvider extends ChangeNotifier {
     String? accountId,
   }) async {
     try {
-      return await _apiService.getWorkerJobSuggestions(
+      final response = await _apiService.getWorkerJobSuggestions(
         workerId: workerId,
         accountId: accountId,
       );
+      _suggestedJobs = response.availableJobs;
+      notifyListeners();
+      return response;
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -171,7 +178,27 @@ class WorkerProvider extends ChangeNotifier {
     String? accountId,
   }) async {
     try {
-      return await _apiService.getWorkerAssignedJobs(
+      final response = await _apiService.getWorkerAssignedJobs(
+        workerId: workerId,
+        accountId: accountId,
+      );
+      _assignedJobs = response;
+      notifyListeners();
+      return response;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return const [];
+    }
+  }
+
+  /// Get job history for worker
+  Future<List<WorkerAssignedJob>> getWorkerJobHistory({
+    required String workerId,
+    String? accountId,
+  }) async {
+    try {
+      return await _apiService.getWorkerJobHistory(
         workerId: workerId,
         accountId: accountId,
       );
@@ -193,6 +220,11 @@ class WorkerProvider extends ChangeNotifier {
       jobId: jobId,
       accountId: accountId,
     );
+    // Refresh both lists to ensure state is consistent
+    await Future.wait([
+      getWorkerJobSuggestions(workerId: workerId, accountId: accountId),
+      getWorkerAssignedJobs(workerId: workerId, accountId: accountId),
+    ]);
   }
 
   /// Start worker job
@@ -206,6 +238,7 @@ class WorkerProvider extends ChangeNotifier {
       jobId: jobId,
       accountId: accountId,
     );
+    await getWorkerAssignedJobs(workerId: workerId, accountId: accountId);
   }
 
   /// Mark worker job as success
@@ -219,5 +252,6 @@ class WorkerProvider extends ChangeNotifier {
       jobId: jobId,
       accountId: accountId,
     );
+    await getWorkerAssignedJobs(workerId: workerId, accountId: accountId);
   }
 }

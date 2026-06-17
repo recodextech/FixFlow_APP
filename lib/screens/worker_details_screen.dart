@@ -445,9 +445,6 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                       : null,
                             ),
                             const SizedBox(height: 12),
-                            _buildInfoRow(Icons.badge_outlined, 'Account',
-                                worker.accountId ?? 'N/A'),
-                            const SizedBox(height: 6),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton.icon(

@@ -15,13 +15,13 @@ class JobPhotoUpload {
   static final ImagePicker _picker = ImagePicker();
 
   /// Maximum number of photos attached to one job.
-  static const int maxPhotosPerJob = 8;
+  static const int maxPhotosPerJob = 4;
 
   /// Longer edge cap before/after compress (picker also pre-scales).
-  static const int maxEdgePixels = 1600;
+  static const int maxEdgePixels = 400;
 
   /// JPEG quality (0–100) after resize.
-  static const int jpegQuality = 78;
+  static const int jpegQuality = 30;
 
   /// Opens system picker; returns `null` if cancelled.
   static Future<XFile?> pickXFile(ImageSource source) {
@@ -29,7 +29,7 @@ class JobPhotoUpload {
       source: source,
       maxWidth: maxEdgePixels.toDouble(),
       maxHeight: maxEdgePixels.toDouble(),
-      imageQuality: 88,
+      imageQuality: jpegQuality,
     );
   }
 

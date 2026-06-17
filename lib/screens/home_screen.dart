@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/preferences_service.dart';
 import '../services/auth_service.dart';
+import '../widgets/profile_avatar.dart';
 import 'worker_profile_screen.dart';
 import 'contractor_profile_screen.dart';
 import 'create_worker_screen.dart';
@@ -27,18 +28,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     if (hasWorker) {
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => WorkerProfileScreen(workerId: workerId),
         ),
       );
     } else {
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const CreateWorkerScreen()),
       );
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _onContractorTap() async {
@@ -50,18 +52,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     if (hasContractor) {
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ContractorProfileScreen(contractorId: contractorId),
         ),
       );
     } else {
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const CreateContractorScreen()),
       );
     }
+    if (mounted) setState(() {});
   }
 
   Future<void> _logout() async {
@@ -101,23 +104,42 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 16),
-                // App title
-                const Text(
-                  'FixFlow',
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Worker & Contractor Manager',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withValues(alpha: 0.7),
-                  ),
+                // Header with profile picture if exists
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'FixFlow',
+                          style: TextStyle(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Worker & Contractor Manager',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (workerPhotoBase64 != null ||
+                        contractorPhotoBase64 != null)
+                      ProfileAvatar(
+                        id: workerPhotoBase64 != null
+                            ? prefs.getWorkerId()!
+                            : prefs.getContractorId()!,
+                        isWorker: workerPhotoBase64 != null,
+                        radius: 28,
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 40),
                 const Text(

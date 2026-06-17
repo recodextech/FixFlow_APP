@@ -231,76 +231,120 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
 
           final contractor = snapshot.data!;
 
-          return NestedScrollView(
-            headerSliverBuilder: (context, innerBoxIsScrolled) {
-              return [
-                SliverToBoxAdapter(
-                  child: _buildGradientHeader(contractor),
-                ),
-                SliverPersistentHeader(
-                  pinned: true,
-                  delegate: ContractorTabBarDelegate(
-                    tabBar: TabBar(
-                      controller: _tabController,
-                      labelColor: AppColors.blue,
-                      unselectedLabelColor: AppColors.gray5,
-                      indicatorColor: AppColors.blue,
-                      indicatorWeight: 3,
-                      tabs: const [
-                        Tab(text: 'Pending'),
-                        Tab(text: 'History'),
-                      ],
-                    ),
-                  ),
-                ),
-              ];
-            },
-            body: FutureBuilder<List<ContractorProcessSummary>>(
-              future: _processesFuture,
-              builder: (context, processSnapshot) {
-                if (processSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+          return FutureBuilder<List<ContractorProcessSummary>>(
+            future: _processesFuture,
+            builder: (context, processSnapshot) {
+              final processes = processSnapshot.data ?? [];
+              final ongoingProcesses = processes
+                  .where((p) => !_isCompletedStatus(p.status))
+                  .toList();
+              final completedProcesses = processes
+                  .where((p) => _isCompletedStatus(p.status))
+                  .toList();
 
-                if (processSnapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.warning_amber_rounded, size: 48, color: AppColors.orange),
-                        const SizedBox(height: 12),
-                        const Text('Could not load processes'),
-                        TextButton.icon(
-                          onPressed: () => setState(() {
-                            _processesFuture = _loadContractorProcesses();
-                          }),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
+              // Sort by job start time (newest first)
+              ongoingProcesses.sort((a, b) {
+                final startA = a.job?.jobStartTime ?? '';
+                final startB = b.job?.jobStartTime ?? '';
+                return startB.compareTo(startA);
+              });
+              completedProcesses.sort((a, b) {
+                final startA = a.job?.jobStartTime ?? '';
+                final startB = b.job?.jobStartTime ?? '';
+                return startB.compareTo(startA);
+              });
+
+              return NestedScrollView(
+                headerSliverBuilder: (context, innerBoxIsScrolled) {
+                  return [
+                    SliverToBoxAdapter(
+                      child: _buildGradientHeader(contractor),
+                    ),
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: ContractorTabBarDelegate(
+                        tabBar: TabBar(
+                          controller: _tabController,
+                          labelColor: AppColors.blue,
+                          unselectedLabelColor: AppColors.gray5,
+                          indicatorColor: AppColors.blue,
+                          indicatorWeight: 3,
+                          tabs: [
+                            Tab(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('Pending'),
+                                  if (ongoingProcesses.isNotEmpty) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.blue,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${ongoingProcesses.length}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const Tab(text: 'History'),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  );
-                }
-
-                final processes = processSnapshot.data ?? [];
-                final ongoingProcesses = processes
-                    .where((p) => !_isCompletedStatus(p.status))
-                    .toList();
-                final completedProcesses = processes
-                    .where((p) => _isCompletedStatus(p.status))
-                    .toList();
-
-                return TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildProcessList(ongoingProcesses, 'No pending processes',
-                        'New processes will appear here.'),
-                    _buildProcessList(completedProcesses, 'No completed processes',
-                        'Completed jobs will show here.'),
-                  ],
-                );
-              },
-            ),
+                  ];
+                },
+                body: processSnapshot.connectionState == ConnectionState.waiting
+                    ? const Center(child: CircularProgressIndicator())
+                    : (processSnapshot.hasError
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.warning_amber_rounded,
+                                    size: 48, color: AppColors.orange),
+                                const SizedBox(height: 12),
+                                const Text('Could not load processes'),
+                                TextButton.icon(
+                                  onPressed: () => setState(() {
+                                    _processesFuture =
+                                        _loadContractorProcesses();
+                                  }),
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          )
+                        : TabBarView(
+                            controller: _tabController,
+                            children: [
+                              _buildProcessList(
+                                ongoingProcesses,
+                                'No pending processes',
+                                'New processes will appear here.',
+                              ),
+                              _buildProcessList(
+                                completedProcesses,
+                                'No completed processes',
+                                'Completed jobs will show here.',
+                              ),
+                            ],
+                          )),
+              );
+            },
           );
         },
       ),

@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/availability.dart';
 import '../models/contractor.dart';
 import '../models/worker.dart';
@@ -35,18 +36,41 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
   late Future<Worker?> _workerFuture;
   late Future<List<WorkerAssignedJob>> _pendingJobsFuture;
+  late Future<List<WorkerAssignedJob>> _historyJobsFuture;
   late Future<WorkerJobSuggestionResponse> _jobSuggestionsFuture;
 
   final Map<String, String> _jobStatusOverrides = {};
   final Set<String> _jobActionInProgress = {};
   bool _hasAvailability = false;
+  List<WorkerAvailability> _availabilities = [];
   final Map<String, Contractor?> _contractorCache = {};
   final Set<String> _loadingContractorIds = {};
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) {
+        switch (_tabController.index) {
+          case 0:
+            _refreshJobSuggestions();
+            break;
+          case 1:
+            _refreshPendingJobs();
+            break;
+          case 2:
+            _refreshHistoryJobs();
+            break;
+        }
+      }
+    });
+
+    // Initialize futures with empty lists/placeholders for lazy loading
+    _pendingJobsFuture = Future.value([]);
+    _historyJobsFuture = Future.value([]);
+    
     _loadProfileData();
   }
 
@@ -59,13 +83,15 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   void _loadProfileData() {
     setState(() {
       _hasAvailability = false;
+      _availabilities = [];
     });
 
     _workerFuture = context.read<WorkerProvider>().getWorker(
       widget.workerId,
       accountId: PreferencesService().getAccountId(),
     );
-    _pendingJobsFuture = _loadPendingJobs();
+    
+    // First fetch only suggested jobs endpoint
     _jobSuggestionsFuture = _loadJobSuggestions();
     _loadAvailabilities();
   }
@@ -83,10 +109,200 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     }
 
     setState(() {
+      _availabilities = response.availabilities;
       _hasAvailability = response.availabilities.isNotEmpty;
     });
 
     return response;
+  }
+
+  Future<void> _deleteAvailability(String availabilityId) async {
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null || accountId.isEmpty) return;
+
+    try {
+      await ApiService().deleteWorkerAvailability(
+        workerId: widget.workerId,
+        availabilityId: availabilityId,
+        accountId: accountId,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Availability window deleted')),
+      );
+
+      _loadAvailabilities();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete availability: $e')),
+      );
+    }
+  }
+
+  int get _totalAvailabilityWindows {
+    return _availabilities.fold(0, (sum, a) => sum + a.windows.length);
+  }
+
+  void _manageAvailability() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final totalWindows = _totalAvailabilityWindows;
+            final canAddMore = totalWindows < 3;
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.6,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) {
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Manage Availability',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                '$totalWindows / 3 Windows used',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: totalWindows >= 3 ? AppColors.orange : AppColors.text2,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: _availabilities.isEmpty
+                          ? const Center(child: Text('No availability set'))
+                          : ListView.builder(
+                              controller: scrollController,
+                              itemCount: _availabilities.length,
+                              itemBuilder: (context, index) {
+                                final avail = _availabilities[index];
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                                      child: Text(
+                                        'Schedule from ${DateFormat('MMM d').format(avail.startDate ?? DateTime.now())} to ${DateFormat('MMM d').format(avail.endDate ?? DateTime.now())}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.text2,
+                                        ),
+                                      ),
+                                    ),
+                                    ...avail.windows.map((window) {
+                                      return ListTile(
+                                        leading: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.greenPale,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(Icons.schedule, color: AppColors.green, size: 20),
+                                        ),
+                                        title: Text(
+                                          DateFormat('EEEE, MMM d, HH:mm').format(window.startTime ?? DateTime.now()),
+                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                        ),
+                                        subtitle: Text('${window.duration} hours duration'),
+                                        trailing: IconButton(
+                                          icon: const Icon(Icons.delete_outline, color: AppColors.red),
+                                          onPressed: () async {
+                                            final confirmed = await showDialog<bool>(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                title: const Text('Delete Window'),
+                                                content: const Text('Are you sure you want to delete this availability window?'),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(ctx, false),
+                                                    child: const Text('Cancel'),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(ctx, true),
+                                                    style: TextButton.styleFrom(foregroundColor: AppColors.red),
+                                                    child: const Text('Delete'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+
+                                            if (confirmed == true) {
+                                              await _deleteAvailability(window.id);
+                                              setModalState(() {}); // Refresh modal
+                                            }
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                    const Divider(),
+                                  ],
+                                );
+                              },
+                            ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: !canAddMore
+                              ? null
+                              : () {
+                                  Navigator.pop(context);
+                                  _openAddAvailability();
+                                },
+                          icon: Icon(canAddMore ? Icons.add : Icons.block),
+                          label: Text(canAddMore ? 'Add More Availability' : 'Limit Reached (Max 3)'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: canAddMore ? AppColors.green : AppColors.gray4,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<WorkerJobSuggestionResponse> _loadJobSuggestions() {
@@ -103,9 +319,22 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
+  Future<List<WorkerAssignedJob>> _loadHistoryJobs() {
+    return context.read<WorkerProvider>().getWorkerJobHistory(
+      workerId: widget.workerId,
+      accountId: PreferencesService().getAccountId(),
+    );
+  }
+
   Future<void> _refreshPendingJobs() async {
     setState(() {
       _pendingJobsFuture = _loadPendingJobs();
+    });
+  }
+
+  Future<void> _refreshHistoryJobs() async {
+    setState(() {
+      _historyJobsFuture = _loadHistoryJobs();
     });
   }
 
@@ -132,6 +361,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     }
 
     setState(() {
+      _availabilities = response.availabilities;
       _hasAvailability = response.availabilities.isNotEmpty;
     });
 
@@ -191,6 +421,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       setState(() {
         _jobStatusOverrides[jobId] = 'ACCEPTED';
         _pendingJobsFuture = _loadPendingJobs();
+        _jobSuggestionsFuture = _loadJobSuggestions();
+        _tabController.animateTo(1);
       });
 
       _loadContractorContactIfNeeded(suggestion.jobInformation.contractorId);
@@ -521,6 +753,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   }
 
   Future<void> _openAddAvailability() async {
+    if (_totalAvailabilityWindows >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Maximum of 3 availability windows reached. Please manage your availability.'),
+          backgroundColor: AppColors.orange,
+        ),
+      );
+      return;
+    }
+
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) =>
@@ -550,7 +792,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 48, color: AppColors.red),
+                  const Icon(Icons.error_outline, size: 48, color: AppColors.red),
                   const SizedBox(height: 16),
                   Text(
                     'Error: ${snapshot.error}',
@@ -572,7 +814,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.person_outline, size: 48, color: AppColors.gray5),
+                  const Icon(Icons.person_outline, size: 48, color: AppColors.gray5),
                   const SizedBox(height: 16),
                   const Text('Worker profile not found'),
                   const SizedBox(height: 16),
@@ -614,9 +856,45 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                       unselectedLabelColor: AppColors.gray5,
                       indicatorColor: AppColors.green,
                       indicatorWeight: 3,
-                      tabs: const [
-                        Tab(text: 'Suggested Jobs'),
-                        Tab(text: 'My Jobs'),
+                      tabs: [
+                        const Tab(text: 'Suggested Jobs'),
+                        Tab(
+                          child: Consumer<WorkerProvider>(
+                            builder: (context, provider, _) {
+                              final count = provider.assignedJobs
+                                  .where(_isPendingAssignedJob)
+                                  .length;
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('My Jobs'),
+                                  if (count > 0) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.red,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '$count',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                        const Tab(text: 'History'),
                       ],
                     ),
                   ),
@@ -625,7 +903,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             },
             body: TabBarView(
               controller: _tabController,
-              children: [_buildSuggestedJobsTab(), _buildPendingJobsTab()],
+              children: [
+                _buildSuggestedJobsTab(),
+                _buildPendingJobsTab(),
+                _buildHistoryJobsTab(),
+              ],
             ),
           );
         },
@@ -638,6 +920,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     String status,
     bool hasAvailability,
   ) {
+    final totalWindows = _totalAvailabilityWindows;
+    final canAddMore = totalWindows < 3;
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -655,98 +940,37 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               // Top bar
               Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.arrow_back, color: Colors.white),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                    visualDensity: VisualDensity.compact,
                   ),
-                  const Spacer(),
-                  const Text(
-                    'Worker Dashboard',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                  const Expanded(
+                    child: Text(
+                      'Worker Dashboard',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: _openAddAvailability,
-                    child: const Icon(
-                      Icons.event_available_outlined,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: _openWorkerDetails,
-                    child: const Icon(Icons.edit_outlined, color: Colors.white),
-                  ),
+                  const SizedBox(width: 48), // Balance for back button
                 ],
               ),
-              const SizedBox(height: 20),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.18),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      hasAvailability
-                          ? Icons.check_circle_outline
-                          : Icons.warning_amber_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        hasAvailability
-                            ? 'Availability is set. You can accept and manage jobs.'
-                            : 'Add your availability to unlock job acceptance.',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    if (!hasAvailability)
-                      TextButton.icon(
-                        onPressed: _openAddAvailability,
-                        icon: const Icon(
-                          Icons.add,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                        label: const Text(
-                          'Add Availability',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.white.withValues(alpha: 0.12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 16),
+              
               // Profile info
               Row(
                 children: [
                   ProfileAvatar(
                     id: worker.id,
                     isWorker: true,
-                    radius: 28,
+                    radius: 35,
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -754,8 +978,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                         Text(
                           worker.workerName,
                           style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
                             color: Colors.white,
                           ),
                         ),
@@ -779,6 +1003,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                   style: const TextStyle(
                                     fontSize: 11,
                                     color: Colors.white,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ),
@@ -787,7 +1012,117 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                       ],
                     ),
                   ),
+                  IconButton(
+                    onPressed: _openWorkerDetails,
+                    icon: const Icon(Icons.edit_outlined),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    tooltip: 'Edit Profile',
+                  ),
                 ],
+              ),
+              const SizedBox(height: 20),
+              
+              // Availability Card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: hasAvailability ? AppColors.greenPale : AppColors.orangePale,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            hasAvailability
+                                ? Icons.event_available
+                                : Icons.event_busy,
+                            color: hasAvailability ? AppColors.green : AppColors.orange,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                hasAvailability ? 'Availability Active' : 'No Availability Set',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: hasAvailability ? AppColors.green : AppColors.orange,
+                                ),
+                              ),
+                              Text(
+                                hasAvailability
+                                    ? '$totalWindows / 3 windows configured'
+                                    : 'Add slots to appear in job searches',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.text2,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (hasAvailability)
+                          TextButton(
+                            onPressed: _manageAvailability,
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.green,
+                              backgroundColor: AppColors.greenPale,
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: const Text('Manage', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                      ],
+                    ),
+                    if (!hasAvailability || canAddMore) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          onPressed: _openAddAvailability,
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add Availability Window', style: TextStyle(fontWeight: FontWeight.w600)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.green,
+                            side: const BorderSide(color: AppColors.green, width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -848,9 +1183,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           );
         }
 
-        final pendingJobs = (snapshot.data ?? [])
-            .where(_isPendingAssignedJob)
-            .toList();
+        final pendingJobs = snapshot.data ?? [];
 
         if (pendingJobs.isEmpty) {
           return _buildEmptyState(
@@ -867,6 +1200,44 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             itemCount: pendingJobs.length,
             itemBuilder: (context, index) =>
                 _buildPendingJobCard(pendingJobs[index], index + 1),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHistoryJobsTab() {
+    return FutureBuilder<List<WorkerAssignedJob>>(
+      future: _historyJobsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return _buildErrorState(
+            'Could not load history',
+            _refreshHistoryJobs,
+          );
+        }
+
+        final historyJobs = snapshot.data ?? [];
+
+        if (historyJobs.isEmpty) {
+          return _buildEmptyState(
+            'No completed jobs',
+            'Your completed jobs will appear here.',
+            Icons.history_rounded,
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async => _refreshHistoryJobs(),
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: historyJobs.length,
+            itemBuilder: (context, index) =>
+                _buildPendingJobCard(historyJobs[index], index + 1),
           ),
         );
       },
@@ -929,6 +1300,13 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       job.contractorId,
     );
 
+    final phone = job.contractorPhoneNumber.isNotEmpty
+        ? job.contractorPhoneNumber
+        : (isContractorLoading
+            ? 'Loading...'
+            : _resolveContractorPhone(contractor));
+    final canCall = phone != 'Loading...' && phone != 'Unavailable';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -965,6 +1343,25 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             const SizedBox(height: 12),
             // Job images (tap to cycle through available images)
             JobImagesWidget(jobId: job.jobId, height: 160),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.greenPale,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '\$${job.jobPaymentAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.green,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 12),
             _buildDetailRow(
               Icons.business,
@@ -974,9 +1371,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             _buildDetailRow(
               Icons.phone,
               'Phone',
-              isContractorLoading
-                  ? 'Loading...'
-                  : _resolveContractorPhone(contractor),
+              phone,
+              onTap: canCall ? () => _makePhoneCall(phone) : null,
             ),
             _buildDetailRow(
               Icons.schedule,
@@ -1115,6 +1511,27 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               ],
             ),
             const SizedBox(height: 12),
+            JobImagesWidget(jobId: job.jobId, height: 160),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.greenPale,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '\$${job.jobPaymentAmount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.green,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             _buildDetailRow(
               Icons.schedule,
               'Start',
@@ -1219,28 +1636,69 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String label, String value) {
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (cleanPhone.isEmpty) return;
+
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: cleanPhone,
+    );
+    try {
+      if (await canLaunchUrl(launchUri)) {
+        await launchUrl(launchUri);
+      }
+    } catch (e) {
+      debugPrint('Could not launch phone call: $e');
+    }
+  }
+
+  Widget _buildDetailRow(
+    IconData icon,
+    String label,
+    String value, {
+    VoidCallback? onTap,
+    Color? valueColor,
+    FontWeight? valueFontWeight,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: AppColors.gray5),
-          const SizedBox(width: 8),
-          Text(
-            '$label: ',
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.text2,
-              fontWeight: FontWeight.w500,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: onTap != null
+                  ? AppColors.blue
+                  : (valueColor ?? AppColors.gray5),
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 13, color: AppColors.text),
+            const SizedBox(width: 8),
+            Text(
+              '$label: ',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.text2,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: onTap != null
+                      ? AppColors.blue
+                      : (valueColor ?? AppColors.text),
+                  fontWeight: valueFontWeight,
+                  decoration: onTap != null ? TextDecoration.underline : null,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

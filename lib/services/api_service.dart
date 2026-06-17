@@ -251,6 +251,37 @@ class ApiService {
     }
   }
 
+  /// Delete worker availability window
+  Future<void> deleteWorkerAvailability({
+    required String workerId,
+    required String availabilityId,
+    required String accountId,
+  }) async {
+    try {
+      final response = await http.delete(
+        Uri.parse(
+          '$_gatewayUrl$_managementPath/worker/$workerId/availability/$availabilityId',
+        ),
+        headers: await _getHeaders(
+          accountId: accountId,
+          traceId: _buildTraceId(),
+        ),
+      );
+
+      if (response.statusCode != 200 &&
+          response.statusCode != 204 &&
+          response.statusCode != 202) {
+        throw Exception(
+          'Failed to delete worker availability: '
+          '${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error deleting worker availability: $e');
+      rethrow;
+    }
+  }
+
   /// Get worker availability windows
   Future<WorkerAvailabilityResponse> getWorkerAvailabilities({
     required String workerId,
@@ -475,6 +506,58 @@ class ApiService {
       return const [];
     } catch (e) {
       print('Error fetching worker assigned jobs: $e');
+      rethrow;
+    }
+  }
+
+  /// Get job history for a worker
+  Future<List<WorkerAssignedJob>> getWorkerJobHistory({
+    required String workerId,
+    String? accountId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_gatewayUrl$_managementPath/jobs/worker/$workerId/history'),
+        headers: await _getHeaders(
+          accountId: accountId,
+          traceId: _buildTraceId(),
+          userId: workerId,
+        ),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to load worker job history: '
+          '${response.statusCode} - ${response.body}',
+        );
+      }
+
+      if (response.body.isEmpty) {
+        return const [];
+      }
+
+      final data = jsonDecode(response.body);
+
+      if (data is List<dynamic>) {
+        return data
+            .whereType<Map<String, dynamic>>()
+            .map(WorkerAssignedJob.fromJson)
+            .toList();
+      }
+
+      if (data is Map<String, dynamic>) {
+        final jobs = data['historyJobs'] ?? data['jobs'] ?? data['history'];
+        if (jobs is List<dynamic>) {
+          return jobs
+              .whereType<Map<String, dynamic>>()
+              .map(WorkerAssignedJob.fromJson)
+              .toList();
+        }
+      }
+
+      return const [];
+    } catch (e) {
+      print('Error fetching worker job history: $e');
       rethrow;
     }
   }

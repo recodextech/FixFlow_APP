@@ -10,6 +10,8 @@ class WorkerAssignedJob {
   final int duration;
   final String contractorId;
   final String contractorName;
+  final String contractorPhoneNumber;
+  final double jobPaymentAmount;
 
   const WorkerAssignedJob({
     required this.workerId,
@@ -23,6 +25,8 @@ class WorkerAssignedJob {
     required this.duration,
     required this.contractorId,
     required this.contractorName,
+    required this.contractorPhoneNumber,
+    required this.jobPaymentAmount,
   });
 
   factory WorkerAssignedJob.fromJson(Map<String, dynamic> json) {
@@ -43,6 +47,8 @@ class WorkerAssignedJob {
       duration: _workerAssignedToInt(json['duration']),
       contractorId: (json['contractorId'] ?? '').toString(),
       contractorName: (json['contractorName'] ?? '').toString(),
+      contractorPhoneNumber: (json['contractorPhoneNumber'] ?? '').toString(),
+      jobPaymentAmount: _workerAssignedToDouble(json['jobPaymentAmount']),
     );
   }
 }
