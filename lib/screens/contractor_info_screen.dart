@@ -1,5 +1,5 @@
-import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +10,23 @@ import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
+import '../utils/performance_utils.dart';
+
+class Debouncer {
+  final Duration delay;
+  Timer? _timer;
+
+  Debouncer({this.delay = const Duration(milliseconds: 500)});
+
+  void call(VoidCallback callback) {
+    _timer?.cancel();
+    _timer = Timer(delay, callback);
+  }
+
+  void dispose() {
+    _timer?.cancel();
+  }
+}
 
 class ContractorInfoScreen extends StatefulWidget {
   final String contractorId;
@@ -37,10 +54,13 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
   Uint8List? _selectedPhotoBytes;
   bool _isSubmitting = false;
   bool _isFormInitialized = false;
+  Contractor? _currentContractor;
+  late Debouncer _saveDebouncer;
 
   @override
   void initState() {
     super.initState();
+    _saveDebouncer = Debouncer(delay: const Duration(milliseconds: 800));
     _contractorFuture = widget.initialContractor != null
         ? Future.value(widget.initialContractor)
         : _loadContractor();
@@ -58,6 +78,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
       return;
     }
 
+    _currentContractor = contractor;
     _nameController.text = contractor.contractorName;
     _emailController.text = contractor.email;
     _phoneController.text = contractor.phoneNumber;
@@ -101,6 +122,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     if (!mounted) return;
 
     setState(() => _selectedPhotoBytes = bytes);
+    _saveDebouncer(_autoSaveContractor);
   }
 
   Future<void> _saveContractor(Contractor contractor) async {
@@ -157,6 +179,47 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
           _isSubmitting = false;
         });
       }
+    }
+  }
+
+  Future<void> _autoSaveContractor() async {
+    if (_currentContractor == null || !_isFormInitialized) return;
+
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null || accountId.isEmpty) return;
+
+    try {
+      final currentPhoto = _selectedPhotoBytes == null
+          ? PreferencesService().getContractorPhotoBase64() ?? _currentContractor!.photoBase64
+          : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
+
+      final updated = await context.read<ContractorProvider>().updateContractor(
+            contractorId: widget.contractorId,
+            accountId: accountId,
+            contractorName: _nameController.text.trim(),
+            contractorType: _contractorType,
+            email: _emailController.text.trim(),
+            phoneNumber: _phoneController.text.trim(),
+            photoBase64: _selectedPhotoBytes != null ? currentPhoto : null,
+          );
+
+      _currentContractor = updated;
+      final savedContractor = updated.copyWith(photoBase64: currentPhoto);
+      PreferencesService().setContractorData(savedContractor);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile updated'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Auto-save failed: $e')),
+      );
     }
   }
 
@@ -286,11 +349,10 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                             ),
                                           ),
                                         )
-                                      : Image.memory(
-                                          base64Decode(currentPhotoBase64),
+                                      : CachedMemoryImage(
+                                          base64String: currentPhotoBase64,
                                           fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
+                                          errorBuilder: (context, error, stackTrace) {
                                             return Center(
                                               child: Text(
                                                 contractor.contractorName.isNotEmpty
@@ -370,6 +432,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _nameController,
+                          onChanged: (_) => _saveDebouncer(_autoSaveContractor),
                           decoration: const InputDecoration(
                             labelText: 'Name',
                             prefixIcon: Icon(Icons.business_outlined),
@@ -399,6 +462,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                         const SizedBox(height: 14),
                         TextFormField(
                           controller: _emailController,
+                          onChanged: (_) => _saveDebouncer(_autoSaveContractor),
                           decoration: const InputDecoration(
                             labelText: 'Email',
                             prefixIcon: Icon(Icons.email_outlined),
@@ -417,6 +481,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                         const SizedBox(height: 14),
                         TextFormField(
                           controller: _phoneController,
+                          onChanged: (_) => _saveDebouncer(_autoSaveContractor),
                           decoration: const InputDecoration(
                             labelText: 'Phone Number',
                             prefixIcon: Icon(Icons.phone_outlined),
@@ -428,37 +493,6 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                             }
                             return null;
                           },
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: ElevatedButton(
-                            onPressed: _isSubmitting
-                                ? null
-                                : () => _saveContractor(contractor),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.blue,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: _isSubmitting
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Text(
-                                    'Save Changes',
-                                    style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                          ),
                         ),
                         const SizedBox(height: 32),
                         // Payment Cards section (placeholder for future integration)
@@ -493,7 +527,10 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
   Widget _buildTypeOption(String value, String label, IconData icon) {
     final selected = _contractorType == value;
     return GestureDetector(
-      onTap: () => setState(() => _contractorType = value),
+      onTap: () {
+        setState(() => _contractorType = value);
+        _saveDebouncer(_autoSaveContractor);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
@@ -719,6 +756,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _saveDebouncer.dispose();
     super.dispose();
   }
 }

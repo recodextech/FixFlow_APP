@@ -1,10 +1,8 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import '../models/job_images.dart';
 import '../services/api_service.dart';
 import '../services/preferences_service.dart';
+import '../utils/performance_utils.dart';
 
 class JobImagesWidget extends StatefulWidget {
   final String jobId;
@@ -63,14 +61,14 @@ class _JobImagesWidgetState extends State<JobImagesWidget> {
     if (_loading) {
       return SizedBox(
         height: widget.height,
-        child: Center(child: CircularProgressIndicator()),
+        child: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_error != null) {
       return SizedBox(
         height: widget.height,
-        child: Center(child: Text('Images not available')),
+        child: const Center(child: Text('Images not available')),
       );
     }
 
@@ -79,12 +77,6 @@ class _JobImagesWidgetState extends State<JobImagesWidget> {
     }
 
     final current = _images[_index];
-    Uint8List? bytes;
-    try {
-      bytes = base64Decode(current.data);
-    } catch (_) {
-      bytes = null;
-    }
 
     return SizedBox(
       height: widget.height,
@@ -103,84 +95,165 @@ class _JobImagesWidgetState extends State<JobImagesWidget> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              bytes == null
-                  ? Container(
-                      color: Colors.grey[200],
-                      child: const Center(child: Text('Image unavailable')),
-                    )
-                  : Image.memory(bytes, fit: BoxFit.cover, width: double.infinity),
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.black.withValues(alpha: 0.05), Colors.black.withValues(alpha: 0.18)],
-                  ),
+              CachedMemoryImage(
+                base64String: current.data,
+                fit: BoxFit.cover,
+                placeholder: Container(
+                  color: Colors.grey[200],
+                  child: const Center(child: Text('Image unavailable')),
                 ),
               ),
-              Positioned(
-                left: 8,
-                top: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.45),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '${_index + 1}/${_images.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 8,
-                bottom: 8,
-                child: IconButton(
-                  onPressed: _previous,
-                  icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.black.withValues(alpha: 0.35),
-                    padding: const EdgeInsets.all(6),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 8,
-                bottom: 8,
-                child: IconButton(
-                  onPressed: _next,
-                  icon: const Icon(Icons.chevron_right_rounded, color: Colors.white),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.black.withValues(alpha: 0.35),
-                    padding: const EdgeInsets.all(6),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 10,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(_images.length, (index) {
-                    final active = index == _index;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: active ? 14 : 6,
-                      height: 6,
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      decoration: BoxDecoration(
-                        color: active ? Colors.white : Colors.white.withValues(alpha: 0.45),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    );
-                  }),
-                ),
+              _ImageOverlay(),
+              _ImageCounter(index: _index, total: _images.length),
+              _PreviousButton(onPressed: _previous),
+              _NextButton(onPressed: _next),
+              _ImageIndicators(
+                currentIndex: _index,
+                totalImages: _images.length,
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ImageOverlay extends StatelessWidget {
+  const _ImageOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withValues(alpha: 0.05),
+            Colors.black.withValues(alpha: 0.18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageCounter extends StatelessWidget {
+  final int index;
+  final int total;
+
+  const _ImageCounter({required this.index, required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 8,
+      top: 8,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          '${index + 1}/$total',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviousButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _PreviousButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 8,
+      bottom: 8,
+      child: IconButton(
+        onPressed: onPressed,
+        icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.black.withValues(alpha: 0.35),
+          padding: const EdgeInsets.all(6),
+        ),
+      ),
+    );
+  }
+}
+
+class _NextButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _NextButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 8,
+      bottom: 8,
+      child: IconButton(
+        onPressed: onPressed,
+        icon: const Icon(Icons.chevron_right_rounded, color: Colors.white),
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.black.withValues(alpha: 0.35),
+          padding: const EdgeInsets.all(6),
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageIndicators extends StatelessWidget {
+  final int currentIndex;
+  final int totalImages;
+
+  const _ImageIndicators({
+    required this.currentIndex,
+    required this.totalImages,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 10,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (int i = 0; i < totalImages; i++)
+            _IndicatorDot(isActive: i == currentIndex),
+        ],
+      ),
+    );
+  }
+}
+
+class _IndicatorDot extends StatelessWidget {
+  final bool isActive;
+
+  const _IndicatorDot({required this.isActive});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: isActive ? 14 : 6,
+      height: 6,
+      margin: const EdgeInsets.symmetric(horizontal: 3),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(999),
       ),
     );
   }

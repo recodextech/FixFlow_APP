@@ -1,5 +1,5 @@
-import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,7 +12,24 @@ import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
+import '../utils/performance_utils.dart';
 import 'create_worker_availability_screen.dart';
+
+class Debouncer {
+  final Duration delay;
+  Timer? _timer;
+
+  Debouncer({this.delay = const Duration(milliseconds: 500)});
+
+  void call(VoidCallback callback) {
+    _timer?.cancel();
+    _timer = Timer(delay, callback);
+  }
+
+  void dispose() {
+    _timer?.cancel();
+  }
+}
 
 class WorkerDetailsScreen extends StatefulWidget {
   final String workerId;
@@ -39,10 +56,13 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   Uint8List? _selectedPhotoBytes;
   bool _isSaving = false;
   bool _isFormInitialized = false;
+  Worker? _currentWorker;
+  late Debouncer _saveDebouncer;
 
   @override
   void initState() {
     super.initState();
+    _saveDebouncer = Debouncer(delay: const Duration(milliseconds: 800));
     _loadData();
   }
 
@@ -56,6 +76,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _saveDebouncer.dispose();
     super.dispose();
   }
 
@@ -101,6 +122,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       return;
     }
 
+    _currentWorker = worker;
     _nameController.text = worker.workerName;
     _emailController.text = worker.email;
     _phoneController.text = worker.phoneNumber;
@@ -141,6 +163,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     if (!mounted) return;
 
     setState(() => _selectedPhotoBytes = bytes);
+    _saveDebouncer(_autoSaveWorker);
   }
 
   Future<void> _saveWorker(Worker worker) async {
@@ -193,6 +216,48 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       if (mounted) {
         setState(() => _isSaving = false);
       }
+    }
+  }
+
+  Future<void> _autoSaveWorker() async {
+    if (_currentWorker == null || !_isFormInitialized) return;
+
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null || accountId.isEmpty) return;
+
+    try {
+      final currentPhoto = _selectedPhotoBytes == null
+          ? PreferencesService().getWorkerPhotoBase64() ?? _currentWorker!.photoBase64
+          : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
+
+      final updated = await context.read<WorkerProvider>().updateWorker(
+            workerId: widget.workerId,
+            accountId: accountId,
+            workerName: _nameController.text.trim(),
+            email: _emailController.text.trim(),
+            phoneNumber: _phoneController.text.trim(),
+            workerCategories: _currentWorker!.workerCategories,
+            photoBase64: _selectedPhotoBytes != null ? currentPhoto : null,
+          );
+
+      _currentWorker = updated;
+      PreferencesService().setWorkerData(
+        updated.copyWith(photoBase64: currentPhoto),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile updated'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Auto-save failed: $e')),
+      );
     }
   }
 
@@ -321,8 +386,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                             ),
                                           ),
                                         )
-                                      : Image.memory(
-                                          base64Decode(currentPhotoBase64),
+                                      : CachedMemoryImage(
+                                          base64String: currentPhotoBase64,
                                           fit: BoxFit.cover,
                                           errorBuilder:
                                               (context, error, stackTrace) {
@@ -403,6 +468,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                           children: [
                             TextFormField(
                               controller: _nameController,
+                              onChanged: (_) => _saveDebouncer(_autoSaveWorker),
                               decoration: const InputDecoration(
                                 labelText: 'Name',
                                 prefixIcon: Icon(Icons.person_outline),
@@ -415,6 +481,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _emailController,
+                              onChanged: (_) => _saveDebouncer(_autoSaveWorker),
                               keyboardType: TextInputType.emailAddress,
                               decoration: const InputDecoration(
                                 labelText: 'Email',
@@ -434,6 +501,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _phoneController,
+                              onChanged: (_) => _saveDebouncer(_autoSaveWorker),
                               keyboardType: TextInputType.phone,
                               decoration: const InputDecoration(
                                 labelText: 'Phone',
@@ -443,37 +511,6 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                   (value == null || value.trim().isEmpty)
                                       ? 'Please enter a phone number'
                                       : null,
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: _isSaving
-                                    ? null
-                                    : () => _saveWorker(worker),
-                                icon: _isSaving
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Icon(Icons.save_outlined),
-                                label: Text(_isSaving
-                                    ? 'Saving...'
-                                    : 'Save Changes'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.green,
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
                             ),
                           ],
                         ),

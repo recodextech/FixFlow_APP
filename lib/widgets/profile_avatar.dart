@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import '../models/job_images.dart';
 import '../services/api_service.dart';
 import '../services/preferences_service.dart';
+import '../utils/performance_utils.dart';
 
 class ProfileAvatar extends StatefulWidget {
   final String id;
@@ -63,7 +63,11 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
   Widget build(BuildContext context) {
     final r = widget.radius;
     if (_loading) {
-      return CircleAvatar(radius: r, backgroundColor: Colors.grey[200], child: const SizedBox.shrink());
+      return CircleAvatar(
+        radius: r,
+        backgroundColor: Colors.grey[200],
+        child: const SizedBox.shrink(),
+      );
     }
 
     if (_item == null || _item!.data.isEmpty) {
@@ -74,25 +78,12 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
       );
     }
 
-    Uint8List? bytes;
-    try {
-      bytes = base64Decode(_item!.data);
-    } catch (_) {
-      bytes = null;
-    }
-
-    if (bytes == null) {
-      return CircleAvatar(
-        radius: r,
-        backgroundColor: Colors.grey[200],
-        child: Icon(widget.isWorker ? Icons.person : Icons.business, size: r),
-      );
-    }
-
-    return CircleAvatar(
+    // Use cached circle avatar with base64 image
+    return CachedCircleAvatar(
+      base64String: _item!.data,
       radius: r,
-      backgroundColor: Colors.transparent,
-      backgroundImage: MemoryImage(bytes),
+      backgroundColor: Colors.grey[200],
+      child: Icon(widget.isWorker ? Icons.person : Icons.business, size: r),
     );
   }
 }

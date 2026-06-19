@@ -15,12 +15,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
-  void _skipLogin(BuildContext context) {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
-  }
-
   Future<void> _signInWithGoogle(BuildContext context) async {
     setState(() => _isLoading = true);
     try {
@@ -83,125 +77,135 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo
+                  const SizedBox(height: 40),
+                  // Animated Logo Container
                   Container(
-                    width: 80,
-                    height: 80,
+                    width: 100,
+                    height: 100,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(22),
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          blurRadius: 20,
+                          spreadRadius: 4,
+                        ),
+                      ],
                     ),
                     child: const Icon(
                       Icons.build_rounded,
-                      size: 44,
+                      size: 54,
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 32),
+                  // App Title with better typography
                   const Text(
                     'FixFlow',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 40,
+                      fontWeight: FontWeight.w800,
                       color: Colors.white,
-                      letterSpacing: -0.5,
+                      letterSpacing: -0.8,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
+                  // Subtitle with improved styling
                   Text(
                     'Connect with top tradespeople\nand contractors instantly',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withValues(alpha: 0.72),
-                      height: 1.5,
+                      fontSize: 16,
+                      color: Colors.white.withValues(alpha: 0.78),
+                      height: 1.6,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 56),
+                  // Decorative divider
                   Container(
-                    width: 48,
-                    height: 1,
-                    color: Colors.white.withValues(alpha: 0.25),
+                    width: 56,
+                    height: 1.5,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0),
+                          Colors.white.withValues(alpha: 0.3),
+                          Colors.white.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 48),
-                  // Google Sign-in Button
+                  const SizedBox(height: 56),
+                  // Google Sign-in Button with enhanced styling
                   SizedBox(
                     width: double.infinity,
-                    height: 52,
+                    height: 56,
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : () => _signInWithGoogle(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: const Color(0xFF3C4043),
-                        elevation: 4,
-                        shadowColor: Colors.black.withValues(alpha: 0.18),
+                        elevation: 8,
+                        shadowColor: Colors.black.withValues(alpha: 0.25),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                       child: _isLoading
                           ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF4285F4),
+                                ),
+                              ),
                             )
                           : const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'G',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 20,
-                              color: Color(0xFF4285F4),
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'G',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 24,
+                                    color: Color(0xFF4285F4),
+                                  ),
+                                ),
+                                SizedBox(width: 14),
+                                Text(
+                                  'Continue with Google',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF3C4043),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          SizedBox(width: 12),
-                          Text(
-                            'Continue with Google',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  // Skip Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: OutlinedButton(
-                      onPressed: () => _skipLogin(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.4),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Skip for now',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 48),
+                  // Terms text with better styling
                   Text(
-                    'By continuing, you agree to our Terms & Privacy Policy',
+                    'By continuing, you agree to our\nTerms & Privacy Policy',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 12,
+                      color: Colors.white.withValues(alpha: 0.56),
+                      height: 1.5,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),

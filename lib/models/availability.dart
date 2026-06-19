@@ -28,7 +28,7 @@ class AvailabilityTimeWindow {
 
   Map<String, dynamic> toJson() {
     return {
-      'startTime': DateFormat("yyyy-MM-dd'T'HH:mm").format(startTime),
+      'startTime': DateFormat('yyyy-MM-dd HH:mm').format(startTime),
       'duration': duration,
     };
   }
@@ -81,6 +81,7 @@ class WorkerAvailabilityWindow {
 }
 
 class WorkerAvailability {
+  final String id;
   final double latitude;
   final double longitude;
   final DateTime? startDate;
@@ -90,6 +91,7 @@ class WorkerAvailability {
   final List<WorkerAvailabilityWindow> windows;
 
   WorkerAvailability({
+    required this.id,
     required this.latitude,
     required this.longitude,
     required this.startDate,
@@ -101,6 +103,10 @@ class WorkerAvailability {
 
   factory WorkerAvailability.fromJson(Map<String, dynamic> json) {
     return WorkerAvailability(
+      id: json['id']?.toString() ??
+          json['availabilityId']?.toString() ??
+          json['availability_id']?.toString() ??
+          '',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       startDate: _parseDate(json['startDate']?.toString()),
