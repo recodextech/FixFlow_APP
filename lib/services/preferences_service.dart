@@ -87,6 +87,18 @@ class PreferencesService {
     return _contractor?.photoBase64 ?? _prefs.getString(_contractorPhotoKey);
   }
 
+  void cacheWorkerPhoto(String base64) {
+    if (base64.isEmpty) return;
+    _worker = _worker?.copyWith(photoBase64: base64);
+    _prefs.setString(_workerPhotoKey, base64);
+  }
+
+  void cacheContractorPhoto(String base64) {
+    if (base64.isEmpty) return;
+    _contractor = _contractor?.copyWith(photoBase64: base64);
+    _prefs.setString(_contractorPhotoKey, base64);
+  }
+
   String? getUserId() => _userId;
 
   String? getAccountId() {

@@ -55,6 +55,11 @@ class AppColors {
   ];
 }
 
+class AppConstants {
+  /// Currency symbol used across the app for displaying monetary amounts.
+  static const String currencySymbol = 'Rs.';
+}
+
 ThemeData buildAppTheme() {
   return ThemeData(
     colorScheme: ColorScheme.fromSeed(

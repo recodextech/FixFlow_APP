@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/availability.dart';
+import '../models/wallet.dart';
 import '../models/worker.dart';
 import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
@@ -53,6 +54,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
   late Future<Worker?> _workerFuture;
   late Future<WorkerAvailabilityResponse> _availabilityFuture;
+  late Future<List<Wallet>> _walletsFuture;
   Uint8List? _selectedPhotoBytes;
   bool _isSaving = false;
   bool _isFormInitialized = false;
@@ -63,6 +65,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   void initState() {
     super.initState();
     _saveDebouncer = Debouncer(delay: const Duration(milliseconds: 800));
+    _walletsFuture = ApiService().getWallets(
+      accountId: PreferencesService().getAccountId(),
+    );
     _loadData();
   }
 
@@ -161,9 +166,64 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
     final bytes = await JobPhotoUpload.pickAndPrepare(source);
     if (!mounted) return;
+    if (bytes == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Update Profile Photo'),
+        content: const Text('Do you want to update your profile photo?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
 
     setState(() => _selectedPhotoBytes = bytes);
-    _saveDebouncer(_autoSaveWorker);
+    _uploadPhoto(bytes);
+  }
+
+  Future<void> _uploadPhoto(Uint8List bytes) async {
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null || accountId.isEmpty) return;
+
+    try {
+      final photoBase64 = JobPhotoUpload.toBase64(bytes);
+      final updated = await context.read<WorkerProvider>().updateWorker(
+            workerId: widget.workerId,
+            accountId: accountId,
+            workerName: _nameController.text.trim(),
+            email: _emailController.text.trim(),
+            phoneNumber: _phoneController.text.trim(),
+            workerCategories: _currentWorker?.workerCategories ?? [],
+            photoBase64: photoBase64,
+          );
+
+      PreferencesService().setWorkerData(updated.copyWith(photoBase64: photoBase64));
+      _currentWorker = updated;
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile photo updated'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update photo: \$e')),
+      );
+    }
   }
 
   Future<void> _saveWorker(Worker worker) async {
@@ -226,10 +286,6 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     if (accountId == null || accountId.isEmpty) return;
 
     try {
-      final currentPhoto = _selectedPhotoBytes == null
-          ? PreferencesService().getWorkerPhotoBase64() ?? _currentWorker!.photoBase64
-          : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
-
       final updated = await context.read<WorkerProvider>().updateWorker(
             workerId: widget.workerId,
             accountId: accountId,
@@ -237,13 +293,15 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
             email: _emailController.text.trim(),
             phoneNumber: _phoneController.text.trim(),
             workerCategories: _currentWorker!.workerCategories,
-            photoBase64: _selectedPhotoBytes != null ? currentPhoto : null,
+            photoBase64: null, // Photo is updated separately via confirmation dialog
           );
 
       _currentWorker = updated;
-      PreferencesService().setWorkerData(
-        updated.copyWith(photoBase64: currentPhoto),
-      );
+      // Preserve the existing photo in preferences
+      final existingPhoto = _selectedPhotoBytes != null
+          ? JobPhotoUpload.toBase64(_selectedPhotoBytes!)
+          : PreferencesService().getWorkerPhotoBase64() ?? _currentWorker!.photoBase64;
+      PreferencesService().setWorkerData(updated.copyWith(photoBase64: existingPhoto));
 
       if (!mounted) return;
 
@@ -256,7 +314,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Auto-save failed: $e')),
+        SnackBar(content: Text('Auto-save failed: \$e')),
       );
     }
   }
@@ -545,6 +603,63 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                           }).toList(),
                         ),
                       const SizedBox(height: 24),
+                      // Wallets
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.greenPale,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.account_balance_wallet_outlined,
+                                    color: AppColors.green,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                const Text(
+                                  'Wallets',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.text,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Your account wallet balances',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.text3,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildWalletSection(),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                       // Availability Windows
                       Row(
                         children: [
@@ -666,6 +781,119 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildWalletSection() {
+    return FutureBuilder<List<Wallet>>(
+      future: _walletsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: AppColors.text3),
+                const SizedBox(width: 8),
+                const Text(
+                  'No wallets found',
+                  style: TextStyle(fontSize: 13, color: AppColors.text3),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: snapshot.data!
+              .map((wallet) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildWalletTile(wallet),
+                  ))
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildWalletTile(Wallet wallet) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.gray2, width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: wallet.iconColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(wallet.icon, color: wallet.iconColor, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    wallet.displayName,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    wallet.status,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.text3,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${AppConstants.currencySymbol} ${wallet.balance.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.green,
+                  ),
+                ),
+                const Text(
+                  'balance',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.text3,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

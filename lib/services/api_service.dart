@@ -812,14 +812,38 @@ class ApiService {
     }
   }
 
-  /// Get processes for a contractor
-  Future<List<ContractorProcessSummary>> getContractorProcesses({
+  /// Get active processes for a contractor
+  Future<List<ContractorProcessSummary>> getActiveContractorProcesses({
     required String contractorId,
+    String? accountId,
+  }) async {
+    return _fetchContractorProcesses(
+      contractorId: contractorId,
+      accountId: accountId,
+      path: 'active',
+    );
+  }
+
+  /// Get history processes for a contractor
+  Future<List<ContractorProcessSummary>> getHistoryContractorProcesses({
+    required String contractorId,
+    String? accountId,
+  }) async {
+    return _fetchContractorProcesses(
+      contractorId: contractorId,
+      accountId: accountId,
+      path: 'history',
+    );
+  }
+
+  Future<List<ContractorProcessSummary>> _fetchContractorProcesses({
+    required String contractorId,
+    required String path,
     String? accountId,
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/processes'),
+        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/processes/$path'),
         headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
@@ -832,7 +856,7 @@ class ApiService {
 
       if (response.statusCode != 200) {
         throw Exception(
-          'Failed to load contractor processes: ${response.statusCode} - ${response.body}',
+          'Failed to load contractor processes ($path): ${response.statusCode} - ${response.body}',
         );
       }
 
@@ -856,7 +880,7 @@ class ApiService {
           .map(ContractorProcessSummary.fromJson)
           .toList();
     } catch (e) {
-      print('Error fetching contractor processes: $e');
+      print('Error fetching contractor processes ($path): $e');
       rethrow;
     }
   }

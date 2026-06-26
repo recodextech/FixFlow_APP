@@ -669,7 +669,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         labelText: 'Amount',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         prefixIcon: const Icon(Icons.attach_money),
-        prefixText: '\$ ',
+        prefixText: '${AppConstants.currencySymbol} ',
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),

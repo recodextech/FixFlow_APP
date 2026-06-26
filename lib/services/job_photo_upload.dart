@@ -35,22 +35,26 @@ class JobPhotoUpload {
 
   /// Compresses to JPEG when a file path exists; otherwise returns raw bytes.
   static Future<Uint8List?> preparePhotoBytes(XFile file) async {
-    if (kIsWeb) {
-      return file.readAsBytes();
+    // Read bytes first — the temp path from the picker can become invalid
+    // on iOS before the native compressor accesses it.
+    final rawBytes = await file.readAsBytes();
+    if (rawBytes.isEmpty) return null;
+
+    if (kIsWeb) return rawBytes;
+
+    try {
+      final compressed = await FlutterImageCompress.compressWithList(
+        rawBytes,
+        minWidth: maxEdgePixels,
+        minHeight: maxEdgePixels,
+        quality: jpegQuality,
+        format: CompressFormat.jpeg,
+        keepExif: false,
+      );
+      return compressed.isEmpty ? rawBytes : compressed;
+    } catch (_) {
+      return rawBytes;
     }
-    final path = file.path;
-    if (path.isEmpty) {
-      return file.readAsBytes();
-    }
-    final compressed = await FlutterImageCompress.compressWithFile(
-      path,
-      minWidth: maxEdgePixels,
-      minHeight: maxEdgePixels,
-      quality: jpegQuality,
-      format: CompressFormat.jpeg,
-      keepExif: false,
-    );
-    return compressed ?? await file.readAsBytes();
   }
 
   /// Convenience for JSON: standard Base64 (no `data:` prefix), MIME implied as image/jpeg.

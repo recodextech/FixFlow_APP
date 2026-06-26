@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/preferences_service.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 import '../widgets/profile_avatar.dart';
 import '../utils/performance_utils.dart';
 import 'worker_profile_screen.dart';
@@ -18,6 +19,51 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _fetchMissingPhotos();
+  }
+
+  Future<void> _fetchMissingPhotos() async {
+    final prefs = PreferencesService();
+    final api = ApiService();
+
+    final workerId = prefs.getWorkerId();
+    final workerAccountId = prefs.getWorkerAccountId();
+    if (workerId != null &&
+        workerId.isNotEmpty &&
+        (prefs.getWorkerPhotoBase64() ?? '').isEmpty) {
+      try {
+        final image = await api.getWorkerProfilePicture(
+          workerId: workerId,
+          accountId: workerAccountId,
+        );
+        if (image != null && image.data.isNotEmpty && mounted) {
+          prefs.cacheWorkerPhoto(image.data);
+          setState(() {});
+        }
+      } catch (_) {}
+    }
+
+    final contractorId = prefs.getContractorId();
+    final contractorAccountId = prefs.getContractorAccountId();
+    if (contractorId != null &&
+        contractorId.isNotEmpty &&
+        (prefs.getContractorPhotoBase64() ?? '').isEmpty) {
+      try {
+        final image = await api.getContractorProfilePicture(
+          contractorId: contractorId,
+          accountId: contractorAccountId,
+        );
+        if (image != null && image.data.isNotEmpty && mounted) {
+          prefs.cacheContractorPhoto(image.data);
+          setState(() {});
+        }
+      } catch (_) {}
+    }
+  }
+
   Future<void> _onWorkerTap() async {
     final prefs = PreferencesService();
     final workerId = prefs.getWorkerId();

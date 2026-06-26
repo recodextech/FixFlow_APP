@@ -3,6 +3,7 @@ export 'payment.dart';
 export 'job.dart';
 
 import 'job.dart';
+import 'payment.dart';
 
 class ProcessRequest {
   final String name;
@@ -40,6 +41,7 @@ class ContractorProcessJobSummary {
   final int durationHours;
   final String assignedWorkerId;
   final String assignedWorkerName;
+  final PaymentInformation? paymentInformation;
 
   ContractorProcessJobSummary({
     required this.id,
@@ -50,6 +52,7 @@ class ContractorProcessJobSummary {
     required this.durationHours,
     this.assignedWorkerId = '',
     this.assignedWorkerName = '',
+    this.paymentInformation,
   });
 
   factory ContractorProcessJobSummary.fromJson(Map<String, dynamic> json) {
@@ -62,6 +65,9 @@ class ContractorProcessJobSummary {
       durationHours: json['durationHours'] ?? json['duration'] ?? 0,
       assignedWorkerId: (json['assignedWorkerId'] ?? json['workerId'] ?? '').toString(),
       assignedWorkerName: (json['assignedWorkerName'] ?? json['workerName'] ?? '').toString(),
+      paymentInformation: json['paymentInformation'] is Map<String, dynamic>
+          ? PaymentInformation.fromJson(json['paymentInformation'] as Map<String, dynamic>)
+          : null,
     );
   }
 }

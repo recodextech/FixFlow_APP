@@ -1171,108 +1171,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              // Categories Section
-              if (worker.categories.isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppColors.greenPale,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.category_outlined,
-                              color: AppColors.green,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Work Categories',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.text,
-                                  ),
-                                ),
-                                Text(
-                                  '${worker.categories.length} category${worker.categories.length > 1 ? 'ies' : ''}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.text3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: worker.categories.map((category) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.greenPale,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: AppColors.green.withValues(alpha: 0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.check_circle_outline,
-                                  size: 16,
-                                  color: AppColors.green,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  category,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.green,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                ),
+
             ],
           ),
         ),
@@ -1502,7 +1401,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '\$${job.jobPaymentAmount.toStringAsFixed(2)}',
+                  '${AppConstants.currencySymbol} ${job.jobPaymentAmount.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -1671,7 +1570,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '\$${job.jobPaymentAmount.toStringAsFixed(2)}',
+                  '${AppConstants.currencySymbol} ${job.jobPaymentAmount.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -1971,7 +1870,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       return 'ASSIGNED';
     }
 
-    return 'IDLE';
+    return '';
   }
 
   String _resolveSuggestionStatus(WorkerJobSuggestion suggestion) {

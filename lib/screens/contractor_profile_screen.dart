@@ -29,29 +29,50 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late Future<Contractor?> _contractorFuture;
-  late Future<List<ContractorProcessSummary>> _processesFuture;
+  late Future<List<ContractorProcessSummary>> _activeProcessesFuture;
+  Future<List<ContractorProcessSummary>>? _historyProcessesFuture;
+  bool _historyLoaded = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
     final accountId = PreferencesService().getAccountId();
     _contractorFuture = context.read<ContractorProvider>().getContractor(
           widget.contractorId,
           accountId: accountId,
         );
-    _processesFuture = _loadContractorProcesses();
+    _activeProcessesFuture = _loadActiveProcesses();
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
   }
 
-  Future<List<ContractorProcessSummary>> _loadContractorProcesses() {
+  void _onTabChanged() {
+    if (_tabController.index == 1 && !_historyLoaded) {
+      setState(() {
+        _historyLoaded = true;
+        _historyProcessesFuture = _loadHistoryProcesses();
+      });
+    }
+  }
+
+  Future<List<ContractorProcessSummary>> _loadActiveProcesses() {
     final accountId = PreferencesService().getAccountId();
-    return ApiService().getContractorProcesses(
+    return ApiService().getActiveContractorProcesses(
+      contractorId: widget.contractorId,
+      accountId: accountId,
+    );
+  }
+
+  Future<List<ContractorProcessSummary>> _loadHistoryProcesses() {
+    final accountId = PreferencesService().getAccountId();
+    return ApiService().getHistoryContractorProcesses(
       contractorId: widget.contractorId,
       accountId: accountId,
     );
@@ -77,7 +98,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     if (!mounted || isCreated != true) return;
 
     setState(() {
-      _processesFuture = _loadContractorProcesses();
+      _activeProcessesFuture = _loadActiveProcesses();
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -116,7 +137,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
       if (!mounted) return;
 
       setState(() {
-        _processesFuture = _loadContractorProcesses();
+        _activeProcessesFuture = _loadActiveProcesses();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -200,7 +221,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                             .read<ContractorProvider>()
                             .getContractor(widget.contractorId,
                                 accountId: PreferencesService().getAccountId());
-                        _processesFuture = _loadContractorProcesses();
+                        _activeProcessesFuture = _loadActiveProcesses();
                       });
                     },
                     child: const Text('Retry'),
@@ -232,27 +253,14 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
           final contractor = snapshot.data!;
 
           return FutureBuilder<List<ContractorProcessSummary>>(
-            future: _processesFuture,
-            builder: (context, processSnapshot) {
-              final processes = processSnapshot.data ?? [];
-              final ongoingProcesses = processes
-                  .where((p) => !_isCompletedStatus(p.status))
-                  .toList();
-              final completedProcesses = processes
-                  .where((p) => _isCompletedStatus(p.status))
-                  .toList();
-
-              // Sort by job start time (newest first)
-              ongoingProcesses.sort((a, b) {
-                final startA = a.job?.jobStartTime ?? '';
-                final startB = b.job?.jobStartTime ?? '';
-                return startB.compareTo(startA);
-              });
-              completedProcesses.sort((a, b) {
-                final startA = a.job?.jobStartTime ?? '';
-                final startB = b.job?.jobStartTime ?? '';
-                return startB.compareTo(startA);
-              });
+            future: _activeProcessesFuture,
+            builder: (context, activeSnapshot) {
+              final activeProcesses = (activeSnapshot.data ?? [])
+                ..sort((a, b) {
+                  final startA = a.job?.jobStartTime ?? '';
+                  final startB = b.job?.jobStartTime ?? '';
+                  return startB.compareTo(startA);
+                });
 
               return NestedScrollView(
                 headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -275,7 +283,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const Text('Pending'),
-                                  if (ongoingProcesses.isNotEmpty) ...[
+                                  if (activeProcesses.isNotEmpty) ...[
                                     const SizedBox(width: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
@@ -287,7 +295,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
-                                        '${ongoingProcesses.length}',
+                                        '${activeProcesses.length}',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 10,
@@ -306,43 +314,85 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                     ),
                   ];
                 },
-                body: processSnapshot.connectionState == ConnectionState.waiting
-                    ? const Center(child: CircularProgressIndicator())
-                    : (processSnapshot.hasError
-                        ? Center(
+                body: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    activeSnapshot.connectionState == ConnectionState.waiting
+                        ? const Center(child: CircularProgressIndicator())
+                        : activeSnapshot.hasError
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.warning_amber_rounded,
+                                        size: 48, color: AppColors.orange),
+                                    const SizedBox(height: 12),
+                                    const Text('Could not load processes'),
+                                    TextButton.icon(
+                                      onPressed: () => setState(() {
+                                        _activeProcessesFuture =
+                                            _loadActiveProcesses();
+                                      }),
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : _buildProcessList(
+                                activeProcesses,
+                                'No pending processes',
+                                'New processes will appear here.',
+                              ),
+                    FutureBuilder<List<ContractorProcessSummary>>(
+                      future: _historyProcessesFuture,
+                      builder: (context, historySnapshot) {
+                        if (_historyProcessesFuture == null) {
+                          return const Center(
+                            child: Text('Press History to load'),
+                          );
+                        }
+                        if (historySnapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (historySnapshot.hasError) {
+                          return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.warning_amber_rounded,
                                     size: 48, color: AppColors.orange),
                                 const SizedBox(height: 12),
-                                const Text('Could not load processes'),
+                                const Text('Could not load history'),
                                 TextButton.icon(
                                   onPressed: () => setState(() {
-                                    _processesFuture =
-                                        _loadContractorProcesses();
+                                    _historyProcessesFuture =
+                                        _loadHistoryProcesses();
                                   }),
                                   icon: const Icon(Icons.refresh),
                                   label: const Text('Retry'),
                                 ),
                               ],
                             ),
-                          )
-                        : TabBarView(
-                            controller: _tabController,
-                            children: [
-                              _buildProcessList(
-                                ongoingProcesses,
-                                'No pending processes',
-                                'New processes will appear here.',
-                              ),
-                              _buildProcessList(
-                                completedProcesses,
-                                'No completed processes',
-                                'Completed jobs will show here.',
-                              ),
-                            ],
-                          )),
+                          );
+                        }
+                        final historyProcesses = (historySnapshot.data ?? [])
+                          ..sort((a, b) {
+                            final startA = a.job?.jobStartTime ?? '';
+                            final startB = b.job?.jobStartTime ?? '';
+                            return startB.compareTo(startA);
+                          });
+                        return _buildProcessList(
+                          historyProcesses,
+                          'No completed processes',
+                          'Completed jobs will show here.',
+                        );
+                      },
+                    ),
+                  ],
+                ),
               );
             },
           );
@@ -468,7 +518,11 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
 
     return RefreshIndicator(
       onRefresh: () async => setState(() {
-        _processesFuture = _loadContractorProcesses();
+        if (_tabController.index == 0) {
+          _activeProcessesFuture = _loadActiveProcesses();
+        } else {
+          _historyProcessesFuture = _loadHistoryProcesses();
+        }
       }),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -478,8 +532,12 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     );
   }
 
-  bool _isCompletedStatus(String status) {
-    return status.trim().toUpperCase() == 'COMPLETED';
+  String _formatPayment(PaymentInformation payment) {
+    final method = payment.method ?? 'N/A';
+    final amount = payment.amount % 1 == 0
+        ? payment.amount.toInt().toString()
+        : payment.amount.toString();
+    return '$method · $amount';
   }
 
   Widget _buildProcessCard(ContractorProcessSummary process) {
@@ -547,6 +605,14 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
               _buildDetailRow(Icons.schedule, 'Start', formatJobStartTime(job.jobStartTime)),
               const SizedBox(height: 6),
               _buildDetailRow(Icons.timer_outlined, 'Duration', '${job.durationHours}h'),
+              if (job.paymentInformation != null) ...[
+                const SizedBox(height: 6),
+                _buildDetailRow(
+                  Icons.payments_outlined,
+                  'Payment',
+                  _formatPayment(job.paymentInformation!),
+                ),
+              ],
               const SizedBox(height: 6),
               _buildAddressRow(
                 Icons.location_on_outlined,

@@ -1,23 +1,27 @@
 class PaymentInformation {
   final double amount;
-  final String walletId;
+  final String? method;
+  final String? walletId;
 
   PaymentInformation({
     required this.amount,
-    required this.walletId,
+    this.method,
+    this.walletId,
   });
 
   factory PaymentInformation.fromJson(Map<String, dynamic> json) {
     return PaymentInformation(
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-      walletId: json['walletId'] ?? '',
+      method: json['method'] as String?,
+      walletId: json['walletId'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'amount': amount,
-      'walletId': walletId,
+      if (method != null) 'method': method,
+      if (walletId != null) 'walletId': walletId,
     };
   }
 }
