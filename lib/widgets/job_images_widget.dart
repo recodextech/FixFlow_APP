@@ -7,8 +7,9 @@ import '../utils/performance_utils.dart';
 class JobImagesWidget extends StatefulWidget {
   final String jobId;
   final double height;
+  final String? contractorId;
 
-  const JobImagesWidget({super.key, required this.jobId, this.height = 150});
+  const JobImagesWidget({super.key, required this.jobId, this.height = 150, this.contractorId});
 
   @override
   State<JobImagesWidget> createState() => _JobImagesWidgetState();
@@ -34,7 +35,13 @@ class _JobImagesWidgetState extends State<JobImagesWidget> {
 
     try {
       final accountId = PreferencesService().getAccountId();
-      final resp = await ApiService().getJobImages(jobId: widget.jobId, accountId: accountId ?? '');
+      final resp = widget.contractorId != null
+          ? await ApiService().getContractorJobImages(
+              contractorId: widget.contractorId!,
+              jobId: widget.jobId,
+              accountId: accountId ?? '',
+            )
+          : await ApiService().getJobImages(jobId: widget.jobId, accountId: accountId ?? '');
       setState(() {
         _images = resp.images;
         _index = 0;

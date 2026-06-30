@@ -214,12 +214,34 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                   children: [
                                     Padding(
                                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                                      child: Text(
-                                        'Schedule from ${DateFormat('MMM d').format(avail.startDate ?? DateTime.now())} to ${DateFormat('MMM d').format(avail.endDate ?? DateTime.now())}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.text2,
-                                        ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              'Schedule from ${DateFormat('MMM d').format(avail.startDate ?? DateTime.now())} to ${DateFormat('MMM d').format(avail.endDate ?? DateTime.now())}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.text2,
+                                              ),
+                                            ),
+                                          ),
+                                          if (avail.frequency.isNotEmpty)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.greenPale,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                avail.frequency,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppColors.green,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                     ...avail.windows.map((window) {
@@ -276,7 +298,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                           },
                                         ),
                                       );
-                                    }).toList(),
+                                    }),
                                     const Divider(),
                                   ],
                                 );
@@ -1027,7 +1049,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                           ),
                                         ),
                                       );
-                                    }).toList(),
+                                    }),
                                     if (worker.categories.length > 2)
                                       Container(
                                         padding: const EdgeInsets.symmetric(

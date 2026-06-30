@@ -24,7 +24,7 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  List<Category> _selectedCategories = [];
+  final List<Category> _selectedCategories = [];
   Uint8List? _profilePhotoBytes;
   bool _isSubmitting = false;
   Map<String, dynamic>? _result;

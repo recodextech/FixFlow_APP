@@ -1,3 +1,4 @@
 {
-    "java.configuration.updateBuildConfiguration": "disabled"
+    "java.configuration.updateBuildConfiguration": "disabled",
+    "cmake.sourceDirectory": "/Users/damindu/Personal/go/src/github.com/recodextech/fixflow_app/linux"
 }

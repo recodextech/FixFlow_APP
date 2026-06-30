@@ -193,7 +193,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: _searchResults.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final result = _searchResults[index];
                   return ListTile(

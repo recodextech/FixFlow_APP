@@ -600,7 +600,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
             if (job != null) ...[
               const Divider(height: 20),
               // Job images
-              JobImagesWidget(jobId: job.id, height: 150),
+              JobImagesWidget(jobId: job.id, height: 150, contractorId: widget.contractorId),
               const SizedBox(height: 8),
               _buildDetailRow(Icons.schedule, 'Start', formatJobStartTime(job.jobStartTime)),
               const SizedBox(height: 6),
@@ -645,7 +645,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                         // open worker details screen if available
                         final workerId = job.assignedWorkerId;
                         if (workerId.isNotEmpty) {
-                          Navigator.pushNamed(context, '/worker/${workerId}');
+                          Navigator.pushNamed(context, '/worker/$workerId');
                         }
                       },
                       icon: const Icon(Icons.arrow_forward_ios, size: 18),

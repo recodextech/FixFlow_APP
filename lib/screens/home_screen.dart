@@ -3,7 +3,6 @@ import '../theme.dart';
 import '../services/preferences_service.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
-import '../widgets/profile_avatar.dart';
 import '../utils/performance_utils.dart';
 import 'worker_profile_screen.dart';
 import 'contractor_profile_screen.dart';
@@ -341,7 +340,7 @@ class _RoleCardImage extends StatelessWidget {
           : CachedMemoryImage(
               base64String: photoBase64,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Icon(icon, size: 56, color: Colors.white),
+              errorBuilder: (_, _, _) => Icon(icon, size: 56, color: Colors.white),
             ),
     );
   }

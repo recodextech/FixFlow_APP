@@ -70,8 +70,8 @@ class ApiService {
       if (token != null) 'Authorization': 'Bearer $token',
       'user-id':
           userId != null && userId.isNotEmpty ? userId : _userId,
-      if (resolvedAccountId != null) 'account-id': resolvedAccountId,
-      if (traceId != null) 'trace-id': traceId,
+      'account-id': ?resolvedAccountId,
+      'trace-id': ?traceId,
     };
   }
 
@@ -135,7 +135,7 @@ class ApiService {
         'phoneNumber': phoneNumber,
         'workerCategories': workerCategories,
         if (photoBase64 != null && photoBase64.isNotEmpty)
-          'ProfilePicture': photoBase64,
+          'profilePicture': photoBase64,
       };
 
       final response = await http.post(
@@ -372,6 +372,37 @@ class ApiService {
       return const WorkerJobSuggestionResponse(availableJobs: []);
     } catch (e) {
       print('Error fetching worker job suggestions: $e');
+      rethrow;
+    }
+  }
+
+  /// Get images for a job via contractor endpoint
+  Future<ImagesResponse> getContractorJobImages({
+    required String contractorId,
+    required String jobId,
+    required String accountId,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/job/$jobId/images'),
+        headers: await _getHeaders(accountId: accountId),
+      );
+
+      if (response.statusCode == 404) {
+        return ImagesResponse(images: []);
+      }
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load contractor job images: ${response.statusCode} - ${response.body}');
+      }
+
+      if (response.body.isEmpty) {
+        return ImagesResponse(images: []);
+      }
+
+      return ImagesResponse.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } catch (e) {
+      print('Error fetching contractor job images: $e');
       rethrow;
     }
   }
@@ -644,7 +675,7 @@ class ApiService {
         'email': email,
         'phoneNumber': phoneNumber,
         if (photoBase64 != null && photoBase64.isNotEmpty)
-          'ProfilePicture': photoBase64,
+          'profilePicture': photoBase64,
       };
 
       final response = await http.post(
