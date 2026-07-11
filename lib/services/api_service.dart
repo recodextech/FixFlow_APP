@@ -32,7 +32,8 @@ class ApiService {
   final Map<String, String> _addressCache = {};
 
   Future<String> reverseGeocode(double latitude, double longitude) async {
-    final key = '${latitude.toStringAsFixed(6)},${longitude.toStringAsFixed(6)}';
+    final key =
+        '${latitude.toStringAsFixed(6)},${longitude.toStringAsFixed(6)}';
     if (_addressCache.containsKey(key)) return _addressCache[key]!;
 
     try {
@@ -40,9 +41,10 @@ class ApiService {
         'https://nominatim.openstreetmap.org/reverse'
         '?lat=$latitude&lon=$longitude&format=json',
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'fixflow_app/1.0',
-      });
+      final response = await http.get(
+        uri,
+        headers: {'User-Agent': 'fixflow_app/1.0'},
+      );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final display = data['display_name'] as String?;
@@ -68,8 +70,7 @@ class ApiService {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
-      'user-id':
-          userId != null && userId.isNotEmpty ? userId : _userId,
+      'user-id': userId != null && userId.isNotEmpty ? userId : _userId,
       'account-id': ?resolvedAccountId,
       'trace-id': ?traceId,
     };
@@ -113,7 +114,9 @@ class ApiService {
       }
 
       final List<dynamic> data = jsonDecode(response.body) ?? [];
-      return data.map((json) => Category.fromJson(json as Map<String, dynamic>)).toList();
+      return data
+          .map((json) => Category.fromJson(json as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       print('Error fetching categories: $e');
       rethrow;
@@ -137,15 +140,18 @@ class ApiService {
         if (photoBase64 != null && photoBase64.isNotEmpty)
           'profilePicture': photoBase64,
       };
-
+      // CRITICAL: This is what actually goes to the server
+      String jsonString = jsonEncode(payload);
       final response = await http.post(
         Uri.parse('$_gatewayUrl$_managementPath/workers'),
         headers: await _getHeaders(),
-        body: jsonEncode(payload),
+        body: jsonString,
       );
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Failed to create worker: ${response.statusCode} - ${response.body}');
+        throw Exception(
+          'Failed to create worker: ${response.statusCode} - ${response.body}',
+        );
       }
 
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -315,7 +321,10 @@ class ApiService {
       if (data is List<dynamic>) {
         return WorkerAvailabilityResponse(
           availabilities: data
-              .map((item) => WorkerAvailability.fromJson(item as Map<String, dynamic>))
+              .map(
+                (item) =>
+                    WorkerAvailability.fromJson(item as Map<String, dynamic>),
+              )
               .toList(),
           total: data.length,
         );
@@ -335,7 +344,9 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/jobs/worker/$workerId/suggestions'),
+        Uri.parse(
+          '$_gatewayUrl$_managementPath/jobs/worker/$workerId/suggestions',
+        ),
         headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
@@ -384,7 +395,9 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/job/$jobId/images'),
+        Uri.parse(
+          '$_gatewayUrl$_managementPath/contractor/$contractorId/job/$jobId/images',
+        ),
         headers: await _getHeaders(accountId: accountId),
       );
 
@@ -393,14 +406,18 @@ class ApiService {
       }
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to load contractor job images: ${response.statusCode} - ${response.body}');
+        throw Exception(
+          'Failed to load contractor job images: ${response.statusCode} - ${response.body}',
+        );
       }
 
       if (response.body.isEmpty) {
         return ImagesResponse(images: []);
       }
 
-      return ImagesResponse.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return ImagesResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
     } catch (e) {
       print('Error fetching contractor job images: $e');
       rethrow;
@@ -423,14 +440,18 @@ class ApiService {
       }
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to load job images: ${response.statusCode} - ${response.body}');
+        throw Exception(
+          'Failed to load job images: ${response.statusCode} - ${response.body}',
+        );
       }
 
       if (response.body.isEmpty) {
         return ImagesResponse(images: []);
       }
 
-      return ImagesResponse.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return ImagesResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
     } catch (e) {
       print('Error fetching job images: $e');
       rethrow;
@@ -444,13 +465,17 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/workers/$workerId/profile-picture'),
+        Uri.parse(
+          '$_gatewayUrl$_managementPath/workers/$workerId/profile-picture',
+        ),
         headers: await _getHeaders(accountId: accountId),
       );
 
       if (response.statusCode == 404) return null;
       if (response.statusCode != 200) {
-        throw Exception('Failed to load worker profile picture: ${response.statusCode} - ${response.body}');
+        throw Exception(
+          'Failed to load worker profile picture: ${response.statusCode} - ${response.body}',
+        );
       }
 
       if (response.body.isEmpty) return null;
@@ -470,13 +495,17 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/contractors/$contractorId/profile-picture'),
+        Uri.parse(
+          '$_gatewayUrl$_managementPath/contractors/$contractorId/profile-picture',
+        ),
         headers: await _getHeaders(accountId: accountId),
       );
 
       if (response.statusCode == 404) return null;
       if (response.statusCode != 200) {
-        throw Exception('Failed to load contractor profile picture: ${response.statusCode} - ${response.body}');
+        throw Exception(
+          'Failed to load contractor profile picture: ${response.statusCode} - ${response.body}',
+        );
       }
 
       if (response.body.isEmpty) return null;
@@ -496,7 +525,9 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/jobs/worker/$workerId/assigned'),
+        Uri.parse(
+          '$_gatewayUrl$_managementPath/jobs/worker/$workerId/assigned',
+        ),
         headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
@@ -525,7 +556,8 @@ class ApiService {
       }
 
       if (data is Map<String, dynamic>) {
-        final jobs = data['assignedJobs'] ?? data['jobs'] ?? data['pendingJobs'];
+        final jobs =
+            data['assignedJobs'] ?? data['jobs'] ?? data['pendingJobs'];
         if (jobs is List<dynamic>) {
           return jobs
               .whereType<Map<String, dynamic>>()
@@ -642,7 +674,9 @@ class ApiService {
     required String action,
   }) async {
     final response = await http.patch(
-      Uri.parse('$_gatewayUrl$_managementPath/worker/$workerId/job/$jobId/$action'),
+      Uri.parse(
+        '$_gatewayUrl$_managementPath/worker/$workerId/job/$jobId/$action',
+      ),
       headers: await _getHeaders(
         accountId: accountId,
         traceId: _buildTraceId(),
@@ -678,14 +712,18 @@ class ApiService {
           'profilePicture': photoBase64,
       };
 
+      String jsonString = jsonEncode(payload);
+
       final response = await http.post(
         Uri.parse('$_gatewayUrl$_managementPath/contractors'),
         headers: await _getHeaders(),
-        body: jsonEncode(payload),
+        body: jsonString,
       );
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Failed to create contractor: ${response.statusCode} - ${response.body}');
+        throw Exception(
+          'Failed to create contractor: ${response.statusCode} - ${response.body}',
+        );
       }
 
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -758,8 +796,6 @@ class ApiService {
     }
   }
 
-
-
   /// Get single worker by ID
   Future<Worker?> getWorker(String workerId, {String? accountId}) async {
     try {
@@ -787,7 +823,10 @@ class ApiService {
   }
 
   /// Get single contractor by ID
-  Future<Contractor?> getContractor(String contractorId, {String? accountId}) async {
+  Future<Contractor?> getContractor(
+    String contractorId, {
+    String? accountId,
+  }) async {
     try {
       final response = await http.get(
         Uri.parse('$_gatewayUrl$_managementPath/contractors/$contractorId'),
@@ -805,7 +844,9 @@ class ApiService {
         throw Exception('Failed to load contractor: ${response.statusCode}');
       }
 
-      return Contractor.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      return Contractor.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
     } catch (e) {
       print('Error fetching contractor: $e');
       rethrow;
@@ -825,7 +866,7 @@ class ApiService {
       }
 
       final data = jsonDecode(response.body);
-      
+
       // Handle both list response and object with wallets key
       List<dynamic> walletList;
       if (data is List<dynamic>) {
@@ -835,8 +876,10 @@ class ApiService {
       } else {
         walletList = [];
       }
-      
-      return walletList.map((json) => Wallet.fromJson(json as Map<String, dynamic>)).toList();
+
+      return walletList
+          .map((json) => Wallet.fromJson(json as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       print('Error fetching wallets: $e');
       rethrow;
@@ -874,7 +917,9 @@ class ApiService {
   }) async {
     try {
       final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/processes/$path'),
+        Uri.parse(
+          '$_gatewayUrl$_managementPath/contractor/$contractorId/processes/$path',
+        ),
         headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
@@ -924,7 +969,9 @@ class ApiService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/processes'),
+        Uri.parse(
+          '$_gatewayUrl$_managementPath/contractor/$contractorId/processes',
+        ),
         headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
@@ -953,7 +1000,9 @@ class ApiService {
   }) async {
     try {
       final response = await http.delete(
-        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId/processes/$processId'),
+        Uri.parse(
+          '$_gatewayUrl$_managementPath/contractor/$contractorId/processes/$processId',
+        ),
         headers: await _getHeaders(
           accountId: accountId,
           traceId: _buildTraceId(),
@@ -1042,7 +1091,9 @@ class ApiService {
   }) async {
     try {
       final response = await http.delete(
-        Uri.parse('$_gatewayUrl$_paymentPath/accounts/$accountId/cards/$cardId'),
+        Uri.parse(
+          '$_gatewayUrl$_paymentPath/accounts/$accountId/cards/$cardId',
+        ),
         headers: await _getHeaders(accountId: accountId),
       );
 
