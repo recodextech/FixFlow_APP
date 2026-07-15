@@ -11,17 +11,33 @@ class ImageCache {
   factory ImageCache() => _instance;
   ImageCache._internal();
 
+  String _normalizeBase64(String raw) {
+    final trimmed = raw.trim();
+    final dataUriMatch = RegExp(
+      r'^data:(image|application)/[^;]+;base64,',
+    ).firstMatch(trimmed);
+
+    if (dataUriMatch != null) {
+      return trimmed.substring(dataUriMatch.end);
+    }
+
+    return trimmed;
+  }
+
   /// Get or decode base64 image bytes, cached for performance.
   Uint8List? decodeBase64(String? base64String) {
     if (base64String == null || base64String.isEmpty) return null;
-    
-    if (_decodedImages.containsKey(base64String)) {
-      return _decodedImages[base64String];
+
+    final normalized = _normalizeBase64(base64String);
+    if (normalized.isEmpty) return null;
+
+    if (_decodedImages.containsKey(normalized)) {
+      return _decodedImages[normalized];
     }
 
     try {
-      final bytes = base64Decode(base64String);
-      _decodedImages[base64String] = bytes;
+      final bytes = base64Decode(normalized);
+      _decodedImages[normalized] = bytes;
       return bytes;
     } catch (_) {
       return null;
@@ -31,16 +47,19 @@ class ImageCache {
   /// Get or create MemoryImage from base64, cached for performance.
   MemoryImage? getMemoryImage(String? base64String) {
     if (base64String == null || base64String.isEmpty) return null;
-    
-    if (_memoryImages.containsKey(base64String)) {
-      return _memoryImages[base64String];
+
+    final normalized = _normalizeBase64(base64String);
+    if (normalized.isEmpty) return null;
+
+    if (_memoryImages.containsKey(normalized)) {
+      return _memoryImages[normalized];
     }
 
-    final bytes = decodeBase64(base64String);
+    final bytes = decodeBase64(normalized);
     if (bytes == null) return null;
 
     final image = MemoryImage(bytes);
-    _memoryImages[base64String] = image;
+    _memoryImages[normalized] = image;
     return image;
   }
 
@@ -72,11 +91,7 @@ class GradientCache {
       return _gradients[key]!;
     }
 
-    final gradient = LinearGradient(
-      begin: begin,
-      end: end,
-      colors: colors,
-    );
+    final gradient = LinearGradient(begin: begin, end: end, colors: colors);
     _gradients[key] = gradient;
     return gradient;
   }
@@ -128,13 +143,21 @@ class CachedMemoryImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bytes = PerformanceUtils.decodeImage(base64String);
-    
+
     if (bytes == null) {
-      return placeholder ?? Container(
-        width: width,
-        height: height,
-        color: Colors.grey[200],
-      );
+      if (placeholder != null) {
+        return placeholder!;
+      }
+
+      if (errorBuilder != null) {
+        return errorBuilder!(
+          context,
+          Exception('Unable to decode image payload'),
+          StackTrace.current,
+        );
+      }
+
+      return Container(width: width, height: height, color: Colors.grey[200]);
     }
 
     return Image.memory(

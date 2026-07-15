@@ -1,15 +1,11 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../models/worker.dart';
 import '../providers/worker_provider.dart';
-import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
-import 'worker_profile_screen.dart';
+import 'profile_photo_upload_screen.dart';
 
 class CreateWorkerScreen extends StatefulWidget {
   const CreateWorkerScreen({super.key});
@@ -25,9 +21,7 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
   final _phoneController = TextEditingController();
 
   final List<Category> _selectedCategories = [];
-  Uint8List? _profilePhotoBytes;
   bool _isSubmitting = false;
-  Map<String, dynamic>? _result;
 
   @override
   void initState() {
@@ -55,42 +49,6 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
     });
   }
 
-  Future<void> _showPhotoSourceSheet() async {
-    if (!mounted) return;
-
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take photo'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Choose from gallery'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (source == null) return;
-
-    final bytes = await JobPhotoUpload.pickAndPrepare(source);
-    if (!mounted) return;
-
-    setState(() => _profilePhotoBytes = bytes);
-  }
-
   Future<void> _submitForm() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedCategories.isEmpty) {
@@ -106,23 +64,18 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
         final workerName = _nameController.text.trim();
         final workerEmail = _emailController.text.trim();
         final workerPhone = _phoneController.text.trim();
-        final photoBase64 = _profilePhotoBytes == null
-            ? null
-            : JobPhotoUpload.toBase64(_profilePhotoBytes!);
 
         final result = await context.read<WorkerProvider>().createWorker(
-              workerName: workerName,
-              email: workerEmail,
-              phoneNumber: workerPhone,
-              workerCategories: _selectedCategories.map((c) => c.id).toList(),
-              photoBase64: photoBase64,
-            );
+          workerName: workerName,
+          email: workerEmail,
+          phoneNumber: workerPhone,
+          workerCategories: _selectedCategories.map((c) => c.id).toList(),
+          photoBase64: null,
+        );
 
         if (result['id'] != null) {
           final prefs = PreferencesService();
-          prefs.setWorkerData(
-            Worker.fromJson(result).copyWith(photoBase64: photoBase64),
-          );
+          prefs.setWorkerData(Worker.fromJson(result));
           await prefs.activateWorkerProfile();
 
           try {
@@ -136,10 +89,8 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
         }
 
         setState(() {
-          _result = result;
           _formKey.currentState!.reset();
           _selectedCategories.clear();
-          _profilePhotoBytes = null;
           _nameController.clear();
           _emailController.clear();
           _phoneController.clear();
@@ -149,13 +100,21 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Worker created successfully')),
           );
-          // Navigate to profile screen
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted) {
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
-                  builder: (context) =>
-                      WorkerProfileScreen(workerId: result['id']),
+                  builder: (context) => ProfilePhotoUploadScreen(
+                    profileType: 'WORKER',
+                    profileId: result['id'],
+                    accountId: PreferencesService().getAccountId(),
+                    profileName: workerName,
+                    email: workerEmail,
+                    phoneNumber: workerPhone,
+                    workerCategories: _selectedCategories
+                        .map((category) => category.id)
+                        .toList(),
+                  ),
                 ),
               );
             }
@@ -163,9 +122,9 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: ${e.toString()}')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
         }
       } finally {
         if (mounted) {
@@ -222,75 +181,6 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Profile Photo',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: _showPhotoSourceSheet,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppColors.gray3),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 72,
-                              height: 72,
-                              decoration: BoxDecoration(
-                                color: AppColors.greenPale,
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: _profilePhotoBytes == null
-                                  ? const Icon(
-                                      Icons.camera_alt_outlined,
-                                      color: AppColors.green,
-                                      size: 30,
-                                    )
-                                  : Image.memory(
-                                      _profilePhotoBytes!,
-                                      fit: BoxFit.cover,
-                                    ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'Upload a profile photo',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.text,
-                                    ),
-                                  ),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Tap to choose a photo from camera or gallery.',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.text3,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
                     // Personal Information section
                     const Text(
                       'Personal Information',
@@ -364,8 +254,10 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                         runSpacing: 8,
                         children: _selectedCategories.map((category) {
                           return Chip(
-                            label: Text(category.name,
-                                style: const TextStyle(fontSize: 13)),
+                            label: Text(
+                              category.name,
+                              style: const TextStyle(fontSize: 13),
+                            ),
                             backgroundColor: AppColors.greenPale,
                             side: BorderSide.none,
                             deleteIcon: const Icon(Icons.close, size: 16),
@@ -396,17 +288,23 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                             child: Text(
                               'Error: ${provider.error}',
                               style: const TextStyle(
-                                  color: AppColors.red, fontSize: 13),
+                                color: AppColors.red,
+                                fontSize: 13,
+                              ),
                             ),
                           );
                         }
 
                         final available = provider.categories
-                            .where((cat) => !_selectedCategories
-                                .any((s) => s.id == cat.id))
+                            .where(
+                              (cat) => !_selectedCategories.any(
+                                (s) => s.id == cat.id,
+                              ),
+                            )
                             .toList();
 
-                        if (available.isEmpty && provider.categories.isNotEmpty) {
+                        if (available.isEmpty &&
+                            provider.categories.isNotEmpty) {
                           return Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -416,7 +314,9 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                             child: const Text(
                               'All categories selected',
                               style: TextStyle(
-                                  color: AppColors.green, fontSize: 13),
+                                color: AppColors.green,
+                                fontSize: 13,
+                              ),
                             ),
                           );
                         }
@@ -435,10 +335,15 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                                 final cat = available[index];
                                 return ListTile(
                                   dense: true,
-                                  title: Text(cat.name,
-                                      style: const TextStyle(fontSize: 14)),
-                                  trailing: const Icon(Icons.add_circle_outline,
-                                      color: AppColors.green, size: 20),
+                                  title: Text(
+                                    cat.name,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                  trailing: const Icon(
+                                    Icons.add_circle_outline,
+                                    color: AppColors.green,
+                                    size: 20,
+                                  ),
                                   onTap: () => _addCategory(cat),
                                 );
                               },
@@ -467,12 +372,16 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                                 height: 22,
                                 width: 22,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               )
                             : const Text(
                                 'Create Worker',
                                 style: TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.w600),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                       ),
                     ),

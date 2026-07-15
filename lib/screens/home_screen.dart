@@ -84,6 +84,9 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute(builder: (_) => const CreateWorkerScreen()),
       );
     }
+
+    if (!mounted) return;
+    await _fetchMissingPhotos();
     if (mounted) setState(() {});
   }
 
@@ -108,6 +111,9 @@ class _HomeScreenState extends State<HomeScreen> {
         MaterialPageRoute(builder: (_) => const CreateContractorScreen()),
       );
     }
+
+    if (!mounted) return;
+    await _fetchMissingPhotos();
     if (mounted) setState(() {});
   }
 
@@ -159,13 +165,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Header with app name
                 const _HomeHeader(),
                 const SizedBox(height: 40),
-                
+
                 // Personalized greeting with first name if available
                 if (hasWorker || hasContractor)
                   Column(
                     children: [
                       Text(
-                        'Welcome back${hasWorker && workerFirstName.isNotEmpty ? ', $workerFirstName' : hasContractor && contractorFirstName.isNotEmpty ? ', $contractorFirstName' : ''}!',
+                        'Welcome back${hasWorker && workerFirstName.isNotEmpty
+                            ? ', $workerFirstName'
+                            : hasContractor && contractorFirstName.isNotEmpty
+                            ? ', $contractorFirstName'
+                            : ''}!',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
@@ -184,12 +194,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Worker Card
                 _RoleCard(
                   icon: Icons.groups_rounded,
-                  title: hasWorker ? (workerFirstName.isNotEmpty ? workerFirstName : 'Worker Profile') : 'Worker Profile',
+                  title: hasWorker
+                      ? (workerFirstName.isNotEmpty
+                            ? workerFirstName
+                            : 'Worker Profile')
+                      : 'Worker Profile',
                   subtitle: hasWorker
                       ? 'Continue to your worker profile'
                       : 'Create your worker profile',
-                  buttonLabel:
-                      hasWorker ? 'Continue as Worker' : 'Create Worker Profile',
+                  buttonLabel: hasWorker
+                      ? 'Continue as Worker'
+                      : 'Create Worker Profile',
                   gradient: AppColors.workerGradient,
                   photoBase64: workerPhotoBase64,
                   fullName: workerName,
@@ -201,7 +216,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 _RoleCard(
                   icon: Icons.apartment_rounded,
                   title: hasContractor
-                      ? (contractorFirstName.isNotEmpty ? contractorFirstName : 'Contractor Profile')
+                      ? (contractorFirstName.isNotEmpty
+                            ? contractorFirstName
+                            : 'Contractor Profile')
                       : 'Contractor Profile',
                   subtitle: hasContractor
                       ? 'Continue to your contractor profile'
@@ -273,10 +290,7 @@ class _RoleCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            _RoleCardImage(
-              photoBase64: photoBase64,
-              icon: icon,
-            ),
+            _RoleCardImage(photoBase64: photoBase64, icon: icon),
             const SizedBox(height: 18),
             Text(
               title,
@@ -301,10 +315,7 @@ class _RoleCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 22),
-            _RoleCardButton(
-              label: buttonLabel,
-              color: gradient.first,
-            ),
+            _RoleCardButton(label: buttonLabel, color: gradient.first),
           ],
         ),
       ),
@@ -316,10 +327,7 @@ class _RoleCardImage extends StatelessWidget {
   final String? photoBase64;
   final IconData icon;
 
-  const _RoleCardImage({
-    required this.photoBase64,
-    required this.icon,
-  });
+  const _RoleCardImage({required this.photoBase64, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -340,7 +348,9 @@ class _RoleCardImage extends StatelessWidget {
           : CachedMemoryImage(
               base64String: photoBase64,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Icon(icon, size: 56, color: Colors.white),
+              placeholder: Icon(icon, size: 56, color: Colors.white),
+              errorBuilder: (_, _, _) =>
+                  Icon(icon, size: 56, color: Colors.white),
             ),
     );
   }
@@ -350,10 +360,7 @@ class _RoleCardButton extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _RoleCardButton({
-    required this.label,
-    required this.color,
-  });
+  const _RoleCardButton({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -380,27 +387,64 @@ class _HomeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'FixFlow',
-          style: TextStyle(
-            fontSize: 34,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            letterSpacing: -0.5,
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.42),
+                  Colors.white.withValues(alpha: 0.18),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.45),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.14),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.handshake_rounded,
+              size: 36,
+              color: Colors.white,
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Worker & Contractor Manager',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.white.withValues(alpha: 0.7),
+          const SizedBox(height: 12),
+          const Text(
+            'FixFlow',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 34,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              letterSpacing: -0.5,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 6),
+          Text(
+            'Worker & Contractor Manager',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.white.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -440,9 +484,7 @@ class _LogoutButton extends StatelessWidget {
         ),
         style: OutlinedButton.styleFrom(
           foregroundColor: Colors.white,
-          side: BorderSide(
-            color: Colors.white.withValues(alpha: 0.4),
-          ),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
