@@ -88,6 +88,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos to attach to your job.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Use your current location to center the map when creating jobs and availability.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Select photos to attach to your job.</string>
 	<key>CFBundleURLTypes</key>

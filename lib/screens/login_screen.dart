@@ -35,7 +35,9 @@ class _LoginScreenState extends State<LoginScreen> {
           await AuthService().logout();
           await PreferencesService().clearAll();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to load account. Please try again.')),
+            const SnackBar(
+              content: Text('Failed to load account. Please try again.'),
+            ),
           );
           return;
         }
@@ -51,9 +53,9 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign-in error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Sign-in error: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -97,10 +99,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.build_rounded,
-                      size: 54,
-                      color: Colors.white,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.asset(
+                        'assets/icons/icon.png',
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -148,7 +154,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : () => _signInWithGoogle(context),
+                      onPressed: _isLoading
+                          ? null
+                          : () => _signInWithGoogle(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: const Color(0xFF3C4043),

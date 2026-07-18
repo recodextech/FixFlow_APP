@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
@@ -24,8 +25,10 @@ class CreateWorkerAvailabilityScreen extends StatefulWidget {
 class _CreateWorkerAvailabilityScreenState
     extends State<CreateWorkerAvailabilityScreen> {
   static const LatLng _defaultColombo = LatLng(6.927079, 79.861244);
+  static const double _mapZoom = 13;
 
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
+  final MapController _mapController = MapController();
 
   LatLng _selectedLocation = _defaultColombo;
   String _selectedAddress = 'Colombo, Sri Lanka';
@@ -35,6 +38,49 @@ class _CreateWorkerAvailabilityScreenState
   String _frequency = 'weekly';
   bool _isSubmitting = false;
   final List<_TimeWindowDraft> _timeWindows = [_TimeWindowDraft(duration: 1)];
+
+  @override
+  void initState() {
+    super.initState();
+    _setInitialLocationFromDevice();
+  }
+
+  Future<void> _setInitialLocationFromDevice() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      if (!mounted) return;
+
+      final userLocation = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _selectedLocation = userLocation;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _mapController.move(userLocation, _mapZoom);
+      });
+      _reverseGeocode(userLocation);
+    } catch (_) {
+      // Keep fallback Colombo location if device location is unavailable.
+    }
+  }
 
   Future<void> _openLocationPicker() async {
     final result = await Navigator.push<LatLng>(
@@ -46,6 +92,10 @@ class _CreateWorkerAvailabilityScreenState
     );
     if (result != null) {
       setState(() => _selectedLocation = result);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _mapController.move(result, _mapZoom);
+      });
       _reverseGeocode(result);
     }
   }
@@ -322,10 +372,10 @@ class _CreateWorkerAvailabilityScreenState
                     children: [
                       IgnorePointer(
                         child: FlutterMap(
-                          key: ValueKey(_selectedLocation),
+                          mapController: _mapController,
                           options: MapOptions(
                             initialCenter: _selectedLocation,
-                            initialZoom: 13,
+                            initialZoom: _mapZoom,
                           ),
                           children: [
                             TileLayer(
