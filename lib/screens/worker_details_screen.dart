@@ -35,16 +35,14 @@ class Debouncer {
 class WorkerDetailsScreen extends StatefulWidget {
   final String workerId;
 
-  const WorkerDetailsScreen({
-    super.key,
-    required this.workerId,
-  });
+  const WorkerDetailsScreen({super.key, required this.workerId});
 
   @override
   State<WorkerDetailsScreen> createState() => _WorkerDetailsScreenState();
 }
 
 class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
+  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
   final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
   final _formKey = GlobalKey<FormState>();
@@ -87,16 +85,16 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
   Future<Worker?> _loadWorker() {
     return context.read<WorkerProvider>().getWorker(
-          widget.workerId,
-          accountId: PreferencesService().getAccountId(),
-        );
+      widget.workerId,
+      accountId: PreferencesService().getAccountId(),
+    );
   }
 
   Future<WorkerAvailabilityResponse> _loadAvailabilities() {
     return context.read<WorkerProvider>().getWorkerAvailabilities(
-          workerId: widget.workerId,
-          accountId: PreferencesService().getAccountId(),
-        );
+      workerId: widget.workerId,
+      accountId: PreferencesService().getAccountId(),
+    );
   }
 
   Future<void> _refreshAvailabilities() async {
@@ -199,16 +197,18 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     try {
       final photoBase64 = JobPhotoUpload.toBase64(bytes);
       final updated = await context.read<WorkerProvider>().updateWorker(
-            workerId: widget.workerId,
-            accountId: accountId,
-            workerName: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            phoneNumber: _phoneController.text.trim(),
-            workerCategories: _currentWorker?.workerCategories ?? [],
-            photoBase64: photoBase64,
-          );
+        workerId: widget.workerId,
+        accountId: accountId,
+        workerName: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        workerCategories: _currentWorker?.workerCategories ?? [],
+        photoBase64: photoBase64,
+      );
 
-      PreferencesService().setWorkerData(updated.copyWith(photoBase64: photoBase64));
+      PreferencesService().setWorkerData(
+        updated.copyWith(photoBase64: photoBase64),
+      );
       _currentWorker = updated;
 
       if (!mounted) return;
@@ -220,10 +220,51 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update photo: \$e')),
-      );
+      _showTopError(_errorMessage(e));
     }
+  }
+
+  bool _isOptionalEmailValid(String email) {
+    return email.isEmpty || _emailPattern.hasMatch(email);
+  }
+
+  bool _canAutoSave() {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+
+    return name.isNotEmpty && phone.isNotEmpty && _isOptionalEmailValid(email);
+  }
+
+  String _errorMessage(Object error) {
+    if (error is ApiException) {
+      return error.message;
+    }
+
+    final message = error.toString().trim();
+    if (message.startsWith('Exception: ')) {
+      return message.substring('Exception: '.length);
+    }
+    return message;
+  }
+
+  void _showTopError(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentMaterialBanner()
+      ..showMaterialBanner(
+        MaterialBanner(
+          backgroundColor: AppColors.redPale,
+          leading: const Icon(Icons.error_outline, color: AppColors.red),
+          content: Text(message, style: const TextStyle(color: AppColors.text)),
+          actions: [
+            TextButton(
+              onPressed: messenger.hideCurrentMaterialBanner,
+              child: const Text('Dismiss'),
+            ),
+          ],
+        ),
+      );
   }
 
   Future<void> _saveWorker(Worker worker) async {
@@ -233,9 +274,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
     final accountId = PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account ID not found')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Account ID not found')));
       return;
     }
 
@@ -247,14 +288,14 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
           : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
 
       final updated = await context.read<WorkerProvider>().updateWorker(
-            workerId: widget.workerId,
-            accountId: accountId,
-            workerName: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            phoneNumber: _phoneController.text.trim(),
-            workerCategories: worker.workerCategories,
-            photoBase64: _selectedPhotoBytes != null ? currentPhoto : null,
-          );
+        workerId: widget.workerId,
+        accountId: accountId,
+        workerName: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        workerCategories: worker.workerCategories,
+        photoBase64: _selectedPhotoBytes != null ? currentPhoto : null,
+      );
 
       PreferencesService().setWorkerData(
         updated.copyWith(photoBase64: currentPhoto),
@@ -269,9 +310,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update worker: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update worker: $e')));
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -280,28 +321,34 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   }
 
   Future<void> _autoSaveWorker() async {
-    if (_currentWorker == null || !_isFormInitialized) return;
+    if (_currentWorker == null || !_isFormInitialized || !_canAutoSave()) {
+      return;
+    }
 
     final accountId = PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) return;
 
     try {
       final updated = await context.read<WorkerProvider>().updateWorker(
-            workerId: widget.workerId,
-            accountId: accountId,
-            workerName: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            phoneNumber: _phoneController.text.trim(),
-            workerCategories: _currentWorker!.workerCategories,
-            photoBase64: null, // Photo is updated separately via confirmation dialog
-          );
+        workerId: widget.workerId,
+        accountId: accountId,
+        workerName: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        workerCategories: _currentWorker!.workerCategories,
+        photoBase64:
+            null, // Photo is updated separately via confirmation dialog
+      );
 
       _currentWorker = updated;
       // Preserve the existing photo in preferences
       final existingPhoto = _selectedPhotoBytes != null
           ? JobPhotoUpload.toBase64(_selectedPhotoBytes!)
-          : PreferencesService().getWorkerPhotoBase64() ?? _currentWorker!.photoBase64;
-      PreferencesService().setWorkerData(updated.copyWith(photoBase64: existingPhoto));
+          : PreferencesService().getWorkerPhotoBase64() ??
+                _currentWorker!.photoBase64;
+      PreferencesService().setWorkerData(
+        updated.copyWith(photoBase64: existingPhoto),
+      );
 
       if (!mounted) return;
 
@@ -313,9 +360,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Auto-save failed: \$e')),
-      );
+      _showTopError(_errorMessage(e));
     }
   }
 
@@ -343,8 +388,10 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                 children: [
                   Icon(Icons.error_outline, size: 48, color: AppColors.red),
                   const SizedBox(height: 16),
-                  Text('Error: ${snapshot.error}',
-                      style: const TextStyle(color: AppColors.text2)),
+                  Text(
+                    'Error: ${snapshot.error}',
+                    style: const TextStyle(color: AppColors.text2),
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => setState(_loadData),
@@ -403,8 +450,10 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                             children: [
                               GestureDetector(
                                 onTap: () => Navigator.pop(context),
-                                child: const Icon(Icons.arrow_back,
-                                    color: Colors.white),
+                                child: const Icon(
+                                  Icons.arrow_back,
+                                  color: Colors.white,
+                                ),
                               ),
                               const Spacer(),
                               const Text(
@@ -432,7 +481,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   clipBehavior: Clip.antiAlias,
-                                  child: (currentPhotoBase64 == null ||
+                                  child:
+                                      (currentPhotoBase64 == null ||
                                           currentPhotoBase64.isEmpty)
                                       ? Center(
                                           child: Text(
@@ -449,17 +499,20 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                           fit: BoxFit.cover,
                                           errorBuilder:
                                               (context, error, stackTrace) {
-                                            return Center(
-                                              child: Text(
-                                                _workerInitial(worker.workerName),
-                                                style: const TextStyle(
-                                                  fontSize: 24,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            );
-                                          },
+                                                return Center(
+                                                  child: Text(
+                                                    _workerInitial(
+                                                      worker.workerName,
+                                                    ),
+                                                    style: const TextStyle(
+                                                      fontSize: 24,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
                                         ),
                                 ),
                               ),
@@ -481,7 +534,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                       worker.email,
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: Colors.white.withValues(alpha: 0.8),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.8,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -513,7 +568,10 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                           ),
                           TextButton.icon(
                             onPressed: _showPhotoSourceSheet,
-                            icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                            icon: const Icon(
+                              Icons.camera_alt_outlined,
+                              size: 18,
+                            ),
                             label: const Text('Update photo'),
                           ),
                         ],
@@ -533,8 +591,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               ),
                               validator: (value) =>
                                   (value == null || value.trim().isEmpty)
-                                      ? 'Please enter a name'
-                                      : null,
+                                  ? 'Please enter a name'
+                                  : null,
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
@@ -546,11 +604,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                 prefixIcon: Icon(Icons.email_outlined),
                               ),
                               validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Please enter an email';
-                                }
-                                if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                                    .hasMatch(value.trim())) {
+                                final email = value?.trim() ?? '';
+                                if (!_isOptionalEmailValid(email)) {
                                   return 'Enter a valid email';
                                 }
                                 return null;
@@ -567,8 +622,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               ),
                               validator: (value) =>
                                   (value == null || value.trim().isEmpty)
-                                      ? 'Please enter a phone number'
-                                      : null,
+                                  ? 'Please enter a phone number'
+                                  : null,
                             ),
                           ],
                         ),
@@ -587,7 +642,10 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                       if (worker.categories.isEmpty)
                         const Text(
                           'No categories assigned',
-                          style: TextStyle(fontSize: 13, color: AppColors.text3),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.text3,
+                          ),
                         )
                       else
                         Wrap(
@@ -595,8 +653,10 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                           runSpacing: 8,
                           children: worker.categories.map((category) {
                             return Chip(
-                              label: Text(category,
-                                  style: const TextStyle(fontSize: 13)),
+                              label: Text(
+                                category,
+                                style: const TextStyle(fontSize: 13),
+                              ),
                               backgroundColor: AppColors.greenPale,
                               side: BorderSide.none,
                             );
@@ -675,8 +735,11 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                           ),
                           GestureDetector(
                             onTap: _refreshAvailabilities,
-                            child: const Icon(Icons.refresh,
-                                size: 20, color: AppColors.green),
+                            child: const Icon(
+                              Icons.refresh,
+                              size: 20,
+                              color: AppColors.green,
+                            ),
                           ),
                         ],
                       ),
@@ -688,8 +751,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               ConnectionState.waiting) {
                             return const Padding(
                               padding: EdgeInsets.symmetric(vertical: 16),
-                              child:
-                                  Center(child: CircularProgressIndicator()),
+                              child: Center(child: CircularProgressIndicator()),
                             );
                           }
 
@@ -702,14 +764,20 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.warning_amber_rounded,
-                                      size: 18, color: AppColors.red),
+                                  const Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 18,
+                                    color: AppColors.red,
+                                  ),
                                   const SizedBox(width: 8),
                                   const Expanded(
-                                    child: Text('Could not load availabilities',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: AppColors.red)),
+                                    child: Text(
+                                      'Could not load availabilities',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: AppColors.red,
+                                      ),
+                                    ),
                                   ),
                                   TextButton(
                                     onPressed: _refreshAvailabilities,
@@ -720,9 +788,12 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                             );
                           }
 
-                          final response = availabilitySnapshot.data ??
+                          final response =
+                              availabilitySnapshot.data ??
                               WorkerAvailabilityResponse(
-                                  availabilities: [], total: 0);
+                                availabilities: [],
+                                total: 0,
+                              );
 
                           if (response.availabilities.isEmpty) {
                             return Container(
@@ -734,19 +805,26 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               ),
                               child: Column(
                                 children: [
-                                  Icon(Icons.event_busy,
-                                      size: 36, color: AppColors.gray4),
+                                  Icon(
+                                    Icons.event_busy,
+                                    size: 36,
+                                    color: AppColors.gray4,
+                                  ),
                                   const SizedBox(height: 8),
                                   const Text(
                                     'No availability windows',
                                     style: TextStyle(
-                                        fontSize: 14, color: AppColors.text2),
+                                      fontSize: 14,
+                                      color: AppColors.text2,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
                                   const Text(
                                     'Tap the button below to add one',
                                     style: TextStyle(
-                                        fontSize: 12, color: AppColors.text3),
+                                      fontSize: 12,
+                                      color: AppColors.text3,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -759,15 +837,18 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               Text(
                                 '${response.total} total',
                                 style: const TextStyle(
-                                    fontSize: 12, color: AppColors.text3),
+                                  fontSize: 12,
+                                  color: AppColors.text3,
+                                ),
                               ),
                               const SizedBox(height: 8),
-                              ...response.availabilities
-                                  .asMap()
-                                  .entries
-                                  .map((entry) {
+                              ...response.availabilities.asMap().entries.map((
+                                entry,
+                              ) {
                                 return _buildAvailabilityCard(
-                                    entry.value, entry.key + 1);
+                                  entry.value,
+                                  entry.key + 1,
+                                );
                               }),
                             ],
                           );
@@ -816,10 +897,12 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
         return Column(
           children: snapshot.data!
-              .map((wallet) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildWalletTile(wallet),
-                  ))
+              .map(
+                (wallet) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildWalletTile(wallet),
+                ),
+              )
               .toList(),
         );
       },
@@ -905,14 +988,19 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
         children: [
           Icon(icon, size: 18, color: AppColors.green),
           const SizedBox(width: 10),
-          Text('$label: ',
-              style: const TextStyle(fontSize: 13, color: AppColors.text3)),
+          Text(
+            '$label: ',
+            style: const TextStyle(fontSize: 13, color: AppColors.text3),
+          ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.text)),
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.text,
+              ),
+            ),
           ),
         ],
       ),
@@ -962,8 +1050,10 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: isOnline ? AppColors.greenPale : AppColors.gray1,
                     borderRadius: BorderRadius.circular(20),
@@ -982,15 +1072,25 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
             const Divider(height: 20),
             Row(
               children: [
-                Icon(Icons.location_on_outlined, size: 15, color: AppColors.text3),
+                Icon(
+                  Icons.location_on_outlined,
+                  size: 15,
+                  color: AppColors.text3,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: FutureBuilder<String>(
-                    future: ApiService().reverseGeocode(availability.latitude, availability.longitude),
+                    future: ApiService().reverseGeocode(
+                      availability.latitude,
+                      availability.longitude,
+                    ),
                     builder: (context, snap) {
                       return Text(
                         snap.data ?? 'Loading address...',
-                        style: const TextStyle(fontSize: 13, color: AppColors.text2),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.text2,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       );
@@ -1014,35 +1114,48 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
               const Text(
                 'Time Windows',
                 style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text2),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text2,
+                ),
               ),
               const SizedBox(height: 6),
               ...availability.windows.map((window) {
                 return Container(
                   margin: const EdgeInsets.only(bottom: 6),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.gray1,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.schedule,
-                          size: 15, color: AppColors.text3),
+                      const Icon(
+                        Icons.schedule,
+                        size: 15,
+                        color: AppColors.text3,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(_formatDateTime(window.startTime),
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.text2)),
-                      ),
-                      Text('${window.duration}h',
+                        child: Text(
+                          _formatDateTime(window.startTime),
                           style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text)),
+                            fontSize: 12,
+                            color: AppColors.text2,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${window.duration}h',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.text,
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -1060,8 +1173,10 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
         Icon(icon, size: 15, color: AppColors.text3),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(value,
-              style: const TextStyle(fontSize: 12, color: AppColors.text2)),
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 12, color: AppColors.text2),
+          ),
         ),
       ],
     );

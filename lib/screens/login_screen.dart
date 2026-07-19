@@ -3,6 +3,7 @@ import '../theme.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../services/preferences_service.dart';
+import 'create_user_screen.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -30,6 +31,16 @@ class _LoginScreenState extends State<LoginScreen> {
             worker: accounts.worker,
             contractor: accounts.contractor,
           );
+
+          if (!mounted) return;
+          final nextScreen = accounts.hasAnyProfile
+              ? const HomeScreen()
+              : const CreateUserScreen();
+
+          Navigator.of(
+            context,
+          ).pushReplacement(MaterialPageRoute(builder: (_) => nextScreen));
+          return;
         } catch (_) {
           if (!mounted) return;
           await AuthService().logout();
@@ -41,11 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           return;
         }
-
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Sign-in failed. Please try again.')),

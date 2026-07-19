@@ -7,7 +7,7 @@ import '../services/api_service.dart';
 
 class WorkerProvider extends ChangeNotifier {
   final ApiService _apiService = ApiService();
-  
+
   bool _isLoading = false;
   String? _error;
   List<Category> _categories = [];
@@ -27,37 +27,6 @@ class WorkerProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _error = e.toString();
-      notifyListeners();
-    }
-  }
-
-  /// Create a new worker
-  Future<Map<String, dynamic>> createWorker({
-    required String workerName,
-    required String email,
-    required String phoneNumber,
-    required List<String> workerCategories,
-    String? photoBase64,
-  }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final result = await _apiService.createWorker(
-        workerName: workerName,
-        email: email,
-        phoneNumber: phoneNumber,
-        workerCategories: workerCategories,
-        photoBase64: photoBase64,
-      );
-      _error = null;
-      return result;
-    } catch (e) {
-      _error = e.toString();
-      rethrow;
-    } finally {
-      _isLoading = false;
       notifyListeners();
     }
   }

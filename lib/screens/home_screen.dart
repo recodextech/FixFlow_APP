@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
 import '../services/preferences_service.dart';
 import '../services/auth_service.dart';
@@ -6,8 +8,7 @@ import '../services/api_service.dart';
 import '../utils/performance_utils.dart';
 import 'worker_profile_screen.dart';
 import 'contractor_profile_screen.dart';
-import 'create_worker_screen.dart';
-import 'create_contractor_screen.dart';
+import 'create_user_screen.dart';
 import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -66,24 +67,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _onWorkerTap() async {
     final prefs = PreferencesService();
     final workerId = prefs.getWorkerId();
-    final hasWorker = workerId != null && workerId.isNotEmpty;
+    if (workerId == null || workerId.isEmpty) {
+      return;
+    }
 
     await prefs.activateWorkerProfile();
     if (!mounted) return;
 
-    if (hasWorker) {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WorkerProfileScreen(workerId: workerId),
-        ),
-      );
-    } else {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const CreateWorkerScreen()),
-      );
-    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkerProfileScreen(workerId: workerId),
+      ),
+    );
 
     if (!mounted) return;
     await _fetchMissingPhotos();
@@ -93,24 +89,30 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _onContractorTap() async {
     final prefs = PreferencesService();
     final contractorId = prefs.getContractorId();
-    final hasContractor = contractorId != null && contractorId.isNotEmpty;
+    if (contractorId == null || contractorId.isEmpty) {
+      return;
+    }
 
     await prefs.activateContractorProfile();
     if (!mounted) return;
 
-    if (hasContractor) {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ContractorProfileScreen(contractorId: contractorId),
-        ),
-      );
-    } else {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const CreateContractorScreen()),
-      );
-    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContractorProfileScreen(contractorId: contractorId),
+      ),
+    );
+
+    if (!mounted) return;
+    await _fetchMissingPhotos();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _onCreateUserTap() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CreateUserScreen()),
+    );
 
     if (!mounted) return;
     await _fetchMissingPhotos();
@@ -191,47 +193,51 @@ class _HomeScreenState extends State<HomeScreen> {
                 const _WhoAreYouText(),
                 const SizedBox(height: 28),
 
-                // Worker Card
-                _RoleCard(
-                  icon: Icons.groups_rounded,
-                  title: hasWorker
-                      ? (workerFirstName.isNotEmpty
-                            ? workerFirstName
-                            : 'Worker Profile')
-                      : 'Worker Profile',
-                  subtitle: hasWorker
-                      ? 'Continue to your worker profile'
-                      : 'Create your worker profile',
-                  buttonLabel: hasWorker
-                      ? 'Continue as Worker'
-                      : 'Create Worker Profile',
-                  gradient: AppColors.workerGradient,
-                  photoBase64: workerPhotoBase64,
-                  fullName: workerName,
-                  onTap: _onWorkerTap,
-                ),
-                const SizedBox(height: 20),
-
-                // Contractor Card
-                _RoleCard(
-                  icon: Icons.apartment_rounded,
-                  title: hasContractor
-                      ? (contractorFirstName.isNotEmpty
-                            ? contractorFirstName
-                            : 'Contractor Profile')
-                      : 'Contractor Profile',
-                  subtitle: hasContractor
-                      ? 'Continue to your contractor profile'
-                      : 'Create your contractor profile',
-                  buttonLabel: hasContractor
-                      ? 'Continue as Contractor'
-                      : 'Create Contractor Profile',
-                  gradient: AppColors.contractorOrangeGradient,
-                  photoBase64: contractorPhotoBase64,
-                  fullName: contractorName,
-                  onTap: _onContractorTap,
-                ),
+                if (!hasWorker && !hasContractor)
+                  _RoleCard(
+                    icon: Icons.person_add_alt_1_rounded,
+                    title: 'Create User Profile',
+                    subtitle:
+                        'Create one user and continue as a worker or contractor',
+                    buttonLabel: 'Create User',
+                    gradient: AppColors.loginGradient,
+                    photoBase64: null,
+                    fullName: null,
+                    onTap: _onCreateUserTap,
+                  )
+                else ...[
+                  if (hasWorker)
+                    _RoleCard(
+                      icon: Icons.groups_rounded,
+                      title: workerFirstName.isNotEmpty
+                          ? workerFirstName
+                          : 'Worker Profile',
+                      subtitle: 'Continue to your worker profile',
+                      buttonLabel: 'Continue as Worker',
+                      gradient: AppColors.workerGradient,
+                      photoBase64: workerPhotoBase64,
+                      fullName: workerName,
+                      onTap: _onWorkerTap,
+                    ),
+                  if (hasWorker && hasContractor) const SizedBox(height: 20),
+                  if (hasContractor)
+                    _RoleCard(
+                      icon: Icons.apartment_rounded,
+                      title: contractorFirstName.isNotEmpty
+                          ? contractorFirstName
+                          : 'Contractor Profile',
+                      subtitle: 'Continue to your contractor profile',
+                      buttonLabel: 'Continue as Contractor',
+                      gradient: AppColors.contractorOrangeGradient,
+                      photoBase64: contractorPhotoBase64,
+                      fullName: contractorName,
+                      onTap: _onContractorTap,
+                    ),
+                ],
                 const SizedBox(height: 32),
+
+                const _AboutUsCard(),
+                const SizedBox(height: 20),
 
                 // Logout Button
                 _LogoutButton(onLogout: _logout),
@@ -417,10 +423,14 @@ class _HomeHeader extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Icon(
-              Icons.handshake_rounded,
-              size: 36,
-              color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/icons/home_header_icon.png',
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -444,6 +454,212 @@ class _HomeHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AboutUsCard extends StatelessWidget {
+  const _AboutUsCard();
+
+  Future<void> _callPhone(BuildContext context, String phoneNumber) async {
+    final telUri = Uri(scheme: 'tel', path: phoneNumber);
+    final launched = await launchUrl(telUri);
+    if (!launched) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Unable to open phone dialer')),
+      );
+    }
+  }
+
+  Future<void> _copyEmail(BuildContext context, String email) async {
+    await Clipboard.setData(ClipboardData(text: email));
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(const SnackBar(content: Text('Email copied to clipboard')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.2),
+            Colors.white.withValues(alpha: 0.1),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -18,
+            right: -10,
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.brandGold.withValues(alpha: 0.22),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPale.withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.info_outline,
+                      color: AppColors.brandGreen,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'About Us',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Need help or partnership details? Reach our team directly:',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.88),
+                  height: 1.35,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _ContactTile(
+                icon: Icons.phone_rounded,
+                label: 'Phone',
+                value: '077 644 3476',
+                actionLabel: 'Tap to call',
+                trailingIcon: Icons.call_rounded,
+                onTap: () => _callPhone(context, '0776443476'),
+              ),
+              const SizedBox(height: 10),
+              _ContactTile(
+                icon: Icons.email_rounded,
+                label: 'Email',
+                value: 'inquiries@noventispvt.xyz',
+                actionLabel: 'Tap to copy',
+                trailingIcon: Icons.copy_rounded,
+                onTap: () => _copyEmail(context, 'inquiries@noventispvt.xyz'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? actionLabel;
+  final IconData? trailingIcon;
+  final VoidCallback? onTap;
+
+  const _ContactTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.actionLabel,
+    this.trailingIcon,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$label:',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.82),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (actionLabel != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        actionLabel!,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailingIcon != null)
+                Icon(
+                  trailingIcon,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  size: 18,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

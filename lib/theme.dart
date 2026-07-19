@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
+  static const brandGreen = Color(0xFF4A945D);
+  static const brandGreenLight = Color(0xFF5AA46C);
+  static const brandGold = Color(0xFFD4BC81);
+  static const brandPale = Color(0xFFEAF4ED);
+
   static const blue = Color(0xFF1565C0);
   static const blueLight = Color(0xFF1E88E5);
   static const bluePale = Color(0xFFE3F2FD);
@@ -53,6 +58,12 @@ class AppColors {
     Color(0xFFF59E2D),
     Color(0xFFFBB03B),
   ];
+
+  static const brandGradient = [
+    Color(0xFF468E59),
+    Color(0xFF529A63),
+    Color(0xFFD1BC86),
+  ];
 }
 
 class AppConstants {
@@ -83,9 +94,7 @@ ThemeData buildAppTheme() {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       ),
     ),

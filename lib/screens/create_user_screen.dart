@@ -1,28 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/worker.dart';
+import '../models/user_accounts.dart';
 import '../providers/worker_provider.dart';
-import '../services/preferences_service.dart';
 import '../services/api_service.dart';
+import '../services/preferences_service.dart';
 import '../theme.dart';
+import 'home_screen.dart';
 import 'profile_photo_upload_screen.dart';
 
-class CreateWorkerScreen extends StatefulWidget {
-  const CreateWorkerScreen({super.key});
+class CreateUserScreen extends StatefulWidget {
+  const CreateUserScreen({super.key});
 
   @override
-  State<CreateWorkerScreen> createState() => _CreateWorkerScreenState();
+  State<CreateUserScreen> createState() => _CreateUserScreenState();
 }
 
-class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
+class _CreateUserScreenState extends State<CreateUserScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
 
+  bool _includeEmail = false;
   String? _activeParentType;
   final Set<String> _selectedCategoryIds = <String>{};
   bool _isSubmitting = false;
+  String? _skillsError;
 
   static const List<String> _parentTypeOrder = [
     'HOUSE_REPAIR',
@@ -68,18 +72,20 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
   Color _parentTypeColor(String parentType) {
     switch (parentType) {
       case 'HOUSE_REPAIR':
-        return AppColors.green;
+        return AppColors.brandGreen;
       case 'GARDEN_WORKS':
-        return Colors.teal;
+        return AppColors.brandGreenLight;
       case 'MAINTENANCE':
-        return Colors.orange;
+        return AppColors.brandGold;
       default:
-        return AppColors.green;
+        return AppColors.brandGreen;
     }
   }
 
   int _subcategoryCount(List<Category> categories, String parentType) {
-    return categories.where((c) => c.parentType?.trim() == parentType).length;
+    return categories
+        .where((category) => category.parentType?.trim() == parentType)
+        .length;
   }
 
   void _toggleParentType(String parentType) {
@@ -93,12 +99,14 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
     String? parentType,
   ) {
     if (parentType == null) return const [];
-    return categories.where((c) => c.parentType?.trim() == parentType).toList();
+    return categories
+        .where((category) => category.parentType?.trim() == parentType)
+        .toList();
   }
 
   List<Category> _selectedCategoryObjects(List<Category> categories) {
     return categories
-        .where((c) => _selectedCategoryIds.contains(c.id))
+        .where((category) => _selectedCategoryIds.contains(category.id))
         .toList();
   }
 
@@ -131,7 +139,11 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
   Widget _buildCategoryInfoButton(Category category) {
     return IconButton(
       tooltip: 'Category description',
-      icon: const Icon(Icons.help_outline, size: 18, color: Colors.black54),
+      icon: const Icon(
+        Icons.help_outline,
+        size: 18,
+        color: AppColors.brandGreen,
+      ),
       splashRadius: 18,
       onPressed: () => _showCategoryDescription(category),
     );
@@ -143,6 +155,10 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
         _selectedCategoryIds.remove(categoryId);
       } else {
         _selectedCategoryIds.add(categoryId);
+      }
+
+      if (_selectedCategoryIds.isNotEmpty) {
+        _skillsError = null;
       }
     });
   }
@@ -239,87 +255,104 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
   }
 
   Future<void> _submitForm() async {
-    if (_formKey.currentState!.validate()) {
-      final selectedCategoryIds = _selectedCategoryIds.toList();
+    if (!_formKey.currentState!.validate()) return;
 
-      if (selectedCategoryIds.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select at least one category')),
+    final selectedCategoryIds = _selectedCategoryIds.toList();
+    if (selectedCategoryIds.isEmpty) {
+      setState(() {
+        _skillsError = 'Please select at least one skill.';
+      });
+      return;
+    }
+
+    _skillsError = null;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final userName = _nameController.text.trim();
+      final userEmail = _includeEmail ? _emailController.text.trim() : '';
+      final userPhone = _phoneController.text.trim();
+
+      final result = await ApiService().createUserAccount(
+        name: userName,
+        email: userEmail,
+        phoneNumber: userPhone,
+        workerCategories: selectedCategoryIds,
+      );
+
+      final prefs = PreferencesService();
+      prefs.loadUserAccounts(
+        userId: result.userId,
+        worker: result.worker,
+        contractor: result.contractor,
+      );
+
+      var latestAccounts = UserAccounts(
+        userId: result.userId,
+        worker: result.worker,
+        contractor: result.contractor,
+      );
+
+      try {
+        final accounts = await ApiService().getUserAccounts();
+        prefs.loadUserAccounts(
+          userId: accounts.userId,
+          worker: accounts.worker,
+          contractor: accounts.contractor,
+        );
+        latestAccounts = accounts;
+      } catch (_) {}
+
+      if (!mounted) return;
+
+      if (latestAccounts.worker != null) {
+        await prefs.activateWorkerProfile();
+      } else if (latestAccounts.contractor != null) {
+        await prefs.activateContractorProfile();
+      }
+
+      if (!mounted) return;
+
+      if (latestAccounts.worker != null || latestAccounts.contractor != null) {
+        final worker = latestAccounts.worker;
+        final contractor = latestAccounts.contractor;
+        final profileType = worker != null ? 'WORKER' : 'CONTRACTOR';
+        final profileId = worker?.id ?? contractor!.id;
+        final accountId = worker?.accountId ?? contractor?.accountId;
+
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => ProfilePhotoUploadScreen(
+              profileType: profileType,
+              profileId: profileId,
+              accountId: accountId,
+              profileName: worker?.workerName ?? contractor?.contractorName,
+              email: worker?.email ?? contractor?.email,
+              phoneNumber: worker?.phoneNumber ?? contractor?.phoneNumber,
+              workerCategories: worker?.workerCategories,
+              contractorType: contractor?.contractorType,
+            ),
+          ),
+          (route) => false,
         );
         return;
       }
 
-      setState(() => _isSubmitting = true);
-
-      try {
-        final workerName = _nameController.text.trim();
-        final workerEmail = _emailController.text.trim();
-        final workerPhone = _phoneController.text.trim();
-
-        final result = await context.read<WorkerProvider>().createWorker(
-          workerName: workerName,
-          email: workerEmail,
-          phoneNumber: workerPhone,
-          workerCategories: selectedCategoryIds,
-          photoBase64: null,
-        );
-
-        if (result['id'] != null) {
-          final prefs = PreferencesService();
-          prefs.setWorkerData(Worker.fromJson(result));
-          await prefs.activateWorkerProfile();
-
-          try {
-            final accounts = await ApiService().getUserAccounts();
-            prefs.loadUserAccounts(
-              userId: accounts.userId,
-              worker: accounts.worker,
-              contractor: accounts.contractor,
-            );
-          } catch (_) {}
-        }
-
-        setState(() {
-          _formKey.currentState!.reset();
-          _activeParentType = null;
-          _selectedCategoryIds.clear();
-          _nameController.clear();
-          _emailController.clear();
-          _phoneController.clear();
-        });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Worker created successfully')),
-          );
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (context) => ProfilePhotoUploadScreen(
-                    profileType: 'WORKER',
-                    profileId: result['id'],
-                    accountId: PreferencesService().getAccountId(),
-                    profileName: workerName,
-                    email: workerEmail,
-                    phoneNumber: workerPhone,
-                    workerCategories: selectedCategoryIds,
-                  ),
-                ),
-              );
-            }
-          });
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isSubmitting = false);
-        }
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+      return;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
       }
     }
   }
@@ -329,13 +362,12 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Green gradient header
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: AppColors.workerGradient,
+                colors: AppColors.brandGradient,
               ),
             ),
             child: SafeArea(
@@ -350,7 +382,7 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                     ),
                     const SizedBox(width: 16),
                     const Text(
-                      'Create Worker Profile',
+                      'Create User Profile',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -362,7 +394,6 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
               ),
             ),
           ),
-          // Form body
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -371,9 +402,8 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Personal Information section
                     const Text(
-                      'Personal Information',
+                      'User Details',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -384,47 +414,73 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(
-                        labelText: 'Full Name',
+                        labelText: 'Full Name *',
                         prefixIcon: Icon(Icons.person_outline),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter worker name';
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter name';
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 14),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email_outlined),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _includeEmail,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text(
+                        'Add email address',
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter email';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Please enter a valid email';
-                        }
-                        return null;
+                      onChanged: (value) {
+                        setState(() {
+                          _includeEmail = value ?? false;
+                          if (!_includeEmail) {
+                            _emailController.clear();
+                          }
+                        });
                       },
                     ),
+                    if (_includeEmail) ...[
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email_outlined),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          final trimmed = value?.trim() ?? '';
+                          if (trimmed.isEmpty) {
+                            return 'Please enter email';
+                          }
+                          if (!trimmed.contains('@')) {
+                            return 'Please enter a valid email';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _phoneController,
                       decoration: const InputDecoration(
-                        labelText: 'Phone Number',
+                        labelText: 'Phone Number *',
                         prefixIcon: Icon(Icons.phone_outlined),
                       ),
                       keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter phone number';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 28),
-                    // Skills & Categories section
                     const Text(
-                      'Skills & Categories',
+                      'Skills & Expertise *',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -433,11 +489,10 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Select the categories you can work in',
+                      'Select at least one skill to continue',
                       style: TextStyle(fontSize: 13, color: AppColors.text3),
                     ),
                     const SizedBox(height: 12),
-                    // Category picker
                     Consumer<WorkerProvider>(
                       builder: (context, provider, _) {
                         if (provider.isLoading && provider.categories.isEmpty) {
@@ -493,7 +548,12 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
 
                         return Container(
                           decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.gray3),
+                            color: AppColors.brandPale,
+                            border: Border.all(
+                              color: AppColors.brandGreen.withValues(
+                                alpha: 0.25,
+                              ),
+                            ),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Padding(
@@ -511,7 +571,9 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                                       color: Colors.grey.shade100,
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                        color: Colors.grey.shade300,
+                                        color: AppColors.brandGreen.withValues(
+                                          alpha: 0.25,
+                                        ),
                                       ),
                                     ),
                                     child: const Text(
@@ -583,8 +645,20 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                                     ],
                                   ),
                                 const SizedBox(height: 12),
+                                if (_skillsError != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text(
+                                      _skillsError!,
+                                      style: const TextStyle(
+                                        color: AppColors.red,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
                                 Text(
-                                  'Selected Subcategories (${selectedCategories.length})',
+                                  'Selected Skills (${selectedCategories.length})',
                                   style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
@@ -600,7 +674,7 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: const Text(
-                                      'No subcategories selected yet.',
+                                      'No skills selected yet.',
                                       style: TextStyle(
                                         fontSize: 12.5,
                                         color: Colors.black54,
@@ -658,15 +732,14 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                         );
                       },
                     ),
-                    const SizedBox(height: 32),
-                    // Submit button
+                    const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
                         onPressed: _isSubmitting ? null : _submitForm,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.green,
+                          backgroundColor: AppColors.brandGreen,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -683,7 +756,7 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                                 ),
                               )
                             : const Text(
-                                'Create Worker',
+                                'Create User',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -691,6 +764,7 @@ class _CreateWorkerScreenState extends State<CreateWorkerScreen> {
                               ),
                       ),
                     ),
+                    const SizedBox(height: 4),
                   ],
                 ),
               ),

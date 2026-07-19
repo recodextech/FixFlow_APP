@@ -2,14 +2,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
-import '../providers/contractor_provider.dart';
-import '../providers/worker_provider.dart';
+import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
-import 'contractor_profile_screen.dart';
-import 'worker_profile_screen.dart';
+import 'home_screen.dart';
 
 class ProfilePhotoUploadScreen extends StatefulWidget {
   final String profileType;
@@ -81,12 +78,12 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
   Future<void> _continueToProfile() async {
     final accountId = widget.accountId ?? PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) {
-      _goToProfile();
+      _goToHome();
       return;
     }
 
     if (_selectedPhotoBytes == null) {
-      _goToProfile();
+      _goToHome();
       return;
     }
 
@@ -95,37 +92,17 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
     try {
       final photoBase64 = JobPhotoUpload.toBase64(_selectedPhotoBytes!);
 
-      if (widget.profileType == 'WORKER') {
-        final updated = await context.read<WorkerProvider>().updateWorker(
-          workerId: widget.profileId,
-          accountId: accountId,
-          workerName: widget.profileName ?? '',
-          email: widget.email ?? '',
-          phoneNumber: widget.phoneNumber ?? '',
-          workerCategories: widget.workerCategories ?? [],
-          photoBase64: photoBase64,
-        );
+      await ApiService().uploadUserProfilePicture(
+        accountId: accountId,
+        photoBase64: photoBase64,
+      );
 
-        PreferencesService().setWorkerData(
-          updated.copyWith(photoBase64: photoBase64),
-        );
-      } else {
-        final updated = await context
-            .read<ContractorProvider>()
-            .updateContractor(
-              contractorId: widget.profileId,
-              accountId: accountId,
-              contractorName: widget.profileName ?? '',
-              contractorType: widget.contractorType ?? 'COMPANY',
-              email: widget.email ?? '',
-              phoneNumber: widget.phoneNumber ?? '',
-              photoBase64: photoBase64,
-            );
-
-        PreferencesService().setContractorData(
-          updated.copyWith(photoBase64: photoBase64),
-        );
-      }
+      final accounts = await ApiService().getUserAccounts();
+      PreferencesService().loadUserAccounts(
+        userId: accounts.userId,
+        worker: accounts.worker,
+        contractor: accounts.contractor,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(
@@ -145,46 +122,31 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
     }
 
     if (mounted) {
-      _goToProfile();
+      _goToHome();
     }
   }
 
-  void _goToProfile() {
+  void _goToHome() {
     if (!mounted) return;
-
-    if (widget.profileType == 'WORKER') {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => WorkerProfileScreen(workerId: widget.profileId),
-        ),
-      );
-      return;
-    }
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => ContractorProfileScreen(contractorId: widget.profileId),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
   }
 
   @override
   Widget build(BuildContext context) {
-    final isWorker = widget.profileType == 'WORKER';
-    final accentColor = isWorker ? AppColors.green : AppColors.blue;
-    final accentPale = isWorker ? AppColors.greenPale : AppColors.bluePale;
+    final accentColor = AppColors.brandGreen;
+    final accentPale = AppColors.brandPale;
 
     return Scaffold(
       body: Column(
         children: [
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: isWorker
-                    ? AppColors.workerGradient
-                    : AppColors.contractorGradient,
+                colors: AppColors.brandGradient,
               ),
             ),
             child: SafeArea(
@@ -194,7 +156,7 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: _goToProfile,
+                      onTap: _goToHome,
                       child: const Icon(Icons.arrow_back, color: Colors.white),
                     ),
                     const SizedBox(width: 16),
@@ -220,7 +182,7 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                 children: [
                   const SizedBox(height: 16),
                   Text(
-                    'Your profile is ready. Add a photo now or skip this step and continue to the profile page.',
+                    'Your profile is ready. Add a photo now or skip this step and continue to the home page.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, color: AppColors.text2),
                   ),
@@ -236,9 +198,7 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                     clipBehavior: Clip.antiAlias,
                     child: _selectedPhotoBytes == null
                         ? Icon(
-                            isWorker
-                                ? Icons.person_outline
-                                : Icons.business_outlined,
+                            Icons.person_outline,
                             size: 56,
                             color: accentColor,
                           )
@@ -268,8 +228,8 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                       icon: const Icon(Icons.skip_next_outlined),
                       label: const Text('Skip for now'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.text,
-                        side: const BorderSide(color: AppColors.gray3),
+                        foregroundColor: AppColors.brandGreen,
+                        side: const BorderSide(color: AppColors.brandGold),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -298,7 +258,7 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                               ),
                             )
                           : const Text(
-                              'Continue to profile',
+                              'Continue to home',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,

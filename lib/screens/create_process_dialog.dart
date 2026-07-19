@@ -1076,9 +1076,11 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
       ],
       style: const TextStyle(fontSize: 16),
+      onChanged: (_) => setState(() {}),
       validator: (value) {
         if (value == null || value.trim().isEmpty) return 'Please enter amount';
-        if (double.tryParse(value) == null) return 'Invalid amount';
+        final parsed = double.tryParse(value);
+        if (parsed == null || parsed <= 0) return 'Enter a valid amount';
         return null;
       },
     );

@@ -11,6 +11,23 @@ import '../models/job_images.dart';
 import 'auth_service.dart';
 import 'preferences_service.dart';
 
+class ApiException implements Exception {
+  final int? statusCode;
+  final String message;
+  final String? trace;
+  final String? debug;
+
+  const ApiException({
+    required this.message,
+    this.statusCode,
+    this.trace,
+    this.debug,
+  });
+
+  @override
+  String toString() => message;
+}
+
 class ApiService {
   // All API calls route through KrakenD gateway
   static const String _gatewayUrl = 'http://noventispvt.xyz:8081';
@@ -80,16 +97,112 @@ class ApiService {
     return 'trace-${DateTime.now().microsecondsSinceEpoch}';
   }
 
+  Future<http.Response> _sendWithAuthRetry({
+    required String method,
+    required Uri uri,
+    String? accountId,
+    String? traceId,
+    String? userId,
+    Object? body,
+    bool retryOnUnauthorized = true,
+  }) async {
+    final headers = await _getHeaders(
+      accountId: accountId,
+      traceId: traceId,
+      userId: userId,
+    );
+
+    late final http.Response response;
+    switch (method.toUpperCase()) {
+      case 'GET':
+        response = await http.get(uri, headers: headers);
+        break;
+      case 'POST':
+        response = await http.post(uri, headers: headers, body: body);
+        break;
+      case 'PATCH':
+        response = await http.patch(uri, headers: headers, body: body);
+        break;
+      case 'DELETE':
+        response = await http.delete(uri, headers: headers, body: body);
+        break;
+      case 'PUT':
+        response = await http.put(uri, headers: headers, body: body);
+        break;
+      default:
+        throw Exception('Unsupported HTTP method: $method');
+    }
+
+    if (response.statusCode == 401 && retryOnUnauthorized) {
+      final refreshed = await AuthService().refreshTokens();
+      if (!refreshed) {
+        return response;
+      }
+
+      return _sendWithAuthRetry(
+        method: method,
+        uri: uri,
+        accountId: accountId,
+        traceId: traceId,
+        userId: userId,
+        body: body,
+        retryOnUnauthorized: false,
+      );
+    }
+
+    return response;
+  }
+
+  ApiException _buildApiException({
+    required String fallbackMessage,
+    required http.Response response,
+  }) {
+    String message = fallbackMessage;
+    String? trace;
+    String? debug;
+
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        final description = decoded['description']?.toString().trim();
+        final apiMessage = decoded['message']?.toString().trim();
+        trace = decoded['trace']?.toString();
+        debug = decoded['debug']?.toString();
+
+        if (description != null && description.isNotEmpty) {
+          message = description;
+        } else if (apiMessage != null && apiMessage.isNotEmpty) {
+          message = apiMessage;
+        }
+      }
+    } catch (_) {
+      final body = response.body.trim();
+      if (body.isNotEmpty) {
+        message = body;
+      }
+    }
+
+    return ApiException(
+      message: message,
+      statusCode: response.statusCode,
+      trace: trace,
+      debug: debug,
+    );
+  }
+
   /// Get user accounts (worker and contractor profiles for the authenticated user)
   Future<UserAccounts> getUserAccounts() async {
     try {
-      final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/user/accounts'),
-        headers: await _getHeaders(),
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse('$_gatewayUrl$_managementPath/user/accounts'),
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to load user accounts: ${response.statusCode}');
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load user accounts',
+          response: response,
+        );
       }
 
       return UserAccounts.fromJson(
@@ -104,13 +217,17 @@ class ApiService {
   /// Get all categories
   Future<List<Category>> getCategories({String? accountId}) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/categories'),
-        headers: await _getHeaders(accountId: accountId),
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse('$_gatewayUrl$_managementPath/categories'),
+        accountId: accountId,
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to load categories: ${response.statusCode}');
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load categories',
+          response: response,
+        );
       }
 
       final List<dynamic> data = jsonDecode(response.body) ?? [];
@@ -119,44 +236,6 @@ class ApiService {
           .toList();
     } catch (e) {
       print('Error fetching categories: $e');
-      rethrow;
-    }
-  }
-
-  /// Create a worker
-  Future<Map<String, dynamic>> createWorker({
-    required String workerName,
-    required String email,
-    required String phoneNumber,
-    required List<String> workerCategories,
-    String? photoBase64,
-  }) async {
-    try {
-      final payload = {
-        'workerName': workerName,
-        'email': email,
-        'phoneNumber': phoneNumber,
-        'workerCategories': workerCategories,
-        if (photoBase64 != null && photoBase64.isNotEmpty)
-          'profilePicture': photoBase64,
-      };
-      // CRITICAL: This is what actually goes to the server
-      String jsonString = jsonEncode(payload);
-      final response = await http.post(
-        Uri.parse('$_gatewayUrl$_managementPath/workers'),
-        headers: await _getHeaders(),
-        body: jsonString,
-      );
-
-      if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(
-          'Failed to create worker: ${response.statusCode} - ${response.body}',
-        );
-      }
-
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (e) {
-      print('Error creating worker: $e');
       rethrow;
     }
   }
@@ -172,20 +251,20 @@ class ApiService {
     String? photoBase64,
   }) async {
     try {
+      final normalizedEmail = email.trim();
       final payload = {
-        'email': email,
+        if (normalizedEmail.isNotEmpty) 'email': normalizedEmail,
         'phoneNumber': phoneNumber,
         if (photoBase64 != null && photoBase64.isNotEmpty)
           'profilePicture': photoBase64,
       };
 
-      final response = await http.patch(
-        Uri.parse('$_gatewayUrl$_managementPath/workers/$workerId'),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-          userId: workerId,
-        ),
+      final response = await _sendWithAuthRetry(
+        method: 'PATCH',
+        uri: Uri.parse('$_gatewayUrl$_managementPath/workers/$workerId'),
+        accountId: accountId,
+        traceId: _buildTraceId(),
+        userId: workerId,
         body: jsonEncode(payload),
       );
 
@@ -193,8 +272,9 @@ class ApiService {
           response.statusCode != 201 &&
           response.statusCode != 202 &&
           response.statusCode != 204) {
-        throw Exception(
-          'Failed to update worker: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to update worker',
+          response: response,
         );
       }
 
@@ -204,7 +284,7 @@ class ApiService {
             Worker(
               id: workerId,
               workerName: workerName,
-              email: email,
+              email: normalizedEmail,
               phoneNumber: phoneNumber,
               workerCategories: workerCategories,
               accountId: accountId,
@@ -225,19 +305,20 @@ class ApiService {
     required WorkerAvailabilityRequest request,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_gatewayUrl$_managementPath/worker/$workerId/availability'),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
+      final response = await _sendWithAuthRetry(
+        method: 'POST',
+        uri: Uri.parse(
+          '$_gatewayUrl$_managementPath/worker/$workerId/availability',
         ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
         body: jsonEncode(request.toJson()),
       );
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(
-          'Failed to create worker availability: '
-          '${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to create worker availability',
+          response: response,
         );
       }
 
@@ -264,22 +345,21 @@ class ApiService {
     required String accountId,
   }) async {
     try {
-      final response = await http.delete(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'DELETE',
+        uri: Uri.parse(
           '$_gatewayUrl$_managementPath/worker/$workerId/availability/$availabilityId',
         ),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-        ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
       );
 
       if (response.statusCode != 200 &&
           response.statusCode != 204 &&
           response.statusCode != 202) {
-        throw Exception(
-          'Failed to delete worker availability: '
-          '${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to delete worker availability',
+          response: response,
         );
       }
     } catch (e) {
@@ -294,18 +374,19 @@ class ApiService {
     String? accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/worker/$workerId/availability'),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse(
+          '$_gatewayUrl$_managementPath/worker/$workerId/availability',
         ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
       );
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load worker availabilities: '
-          '${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load worker availabilities',
+          response: response,
         );
       }
 
@@ -343,21 +424,20 @@ class ApiService {
     String? accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse(
           '$_gatewayUrl$_managementPath/jobs/worker/$workerId/suggestions',
         ),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-          userId: workerId,
-        ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
+        userId: workerId,
       );
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load worker job suggestions: '
-          '${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load worker job suggestions',
+          response: response,
         );
       }
 
@@ -394,11 +474,12 @@ class ApiService {
     required String accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse(
           '$_gatewayUrl$_managementPath/contractor/$contractorId/job/$jobId/images',
         ),
-        headers: await _getHeaders(accountId: accountId),
+        accountId: accountId,
       );
 
       if (response.statusCode == 404) {
@@ -406,8 +487,9 @@ class ApiService {
       }
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load contractor job images: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load contractor job images',
+          response: response,
         );
       }
 
@@ -430,9 +512,10 @@ class ApiService {
     required String accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/job/$jobId/images'),
-        headers: await _getHeaders(accountId: accountId),
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse('$_gatewayUrl$_managementPath/job/$jobId/images'),
+        accountId: accountId,
       );
 
       if (response.statusCode == 404) {
@@ -440,8 +523,9 @@ class ApiService {
       }
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load job images: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load job images',
+          response: response,
         );
       }
 
@@ -464,17 +548,19 @@ class ApiService {
     String? accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse(
           '$_gatewayUrl$_managementPath/workers/$workerId/profile-picture',
         ),
-        headers: await _getHeaders(accountId: accountId),
+        accountId: accountId,
       );
 
       if (response.statusCode == 404) return null;
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load worker profile picture: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load worker profile picture',
+          response: response,
         );
       }
 
@@ -494,17 +580,19 @@ class ApiService {
     String? accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse(
           '$_gatewayUrl$_managementPath/contractors/$contractorId/profile-picture',
         ),
-        headers: await _getHeaders(accountId: accountId),
+        accountId: accountId,
       );
 
       if (response.statusCode == 404) return null;
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load contractor profile picture: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load contractor profile picture',
+          response: response,
         );
       }
 
@@ -524,21 +612,20 @@ class ApiService {
     String? accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse(
           '$_gatewayUrl$_managementPath/jobs/worker/$workerId/assigned',
         ),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-          userId: workerId,
-        ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
+        userId: workerId,
       );
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load worker assigned jobs: '
-          '${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load worker assigned jobs',
+          response: response,
         );
       }
 
@@ -579,19 +666,20 @@ class ApiService {
     String? accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/jobs/worker/$workerId/history'),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-          userId: workerId,
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse(
+          '$_gatewayUrl$_managementPath/jobs/worker/$workerId/history',
         ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
+        userId: workerId,
       );
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load worker job history: '
-          '${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load worker job history',
+          response: response,
         );
       }
 
@@ -673,62 +761,96 @@ class ApiService {
     required String accountId,
     required String action,
   }) async {
-    final response = await http.patch(
-      Uri.parse(
+    final response = await _sendWithAuthRetry(
+      method: 'PATCH',
+      uri: Uri.parse(
         '$_gatewayUrl$_managementPath/worker/$workerId/job/$jobId/$action',
       ),
-      headers: await _getHeaders(
-        accountId: accountId,
-        traceId: _buildTraceId(),
-        userId: workerId,
-      ),
+      accountId: accountId,
+      traceId: _buildTraceId(),
+      userId: workerId,
     );
 
     if (response.statusCode != 200 &&
         response.statusCode != 202 &&
         response.statusCode != 204) {
-      throw Exception(
-        'Failed to update worker job status: '
-        '${response.statusCode} - ${response.body}',
+      throw _buildApiException(
+        fallbackMessage: 'Failed to update worker job status',
+        response: response,
       );
     }
   }
 
-  /// Create a contractor
-  Future<Map<String, dynamic>> createContractor({
-    required String contractorName,
-    required String contractorType,
+  /// Create a user account with both worker and contractor profiles.
+  Future<UserAccounts> createUserAccount({
+    required String name,
     required String email,
     required String phoneNumber,
+    required List<String> workerCategories,
     String? photoBase64,
   }) async {
     try {
       final payload = {
-        'contractorName': contractorName,
-        'contractorType': contractorType,
+        'name': name,
         'email': email,
         'phoneNumber': phoneNumber,
+        'workerCategories': workerCategories,
         if (photoBase64 != null && photoBase64.isNotEmpty)
           'profilePicture': photoBase64,
       };
 
-      String jsonString = jsonEncode(payload);
-
-      final response = await http.post(
-        Uri.parse('$_gatewayUrl$_managementPath/contractors'),
-        headers: await _getHeaders(),
-        body: jsonString,
+      final response = await _sendWithAuthRetry(
+        method: 'POST',
+        uri: Uri.parse('$_gatewayUrl$_managementPath/user/accounts'),
+        traceId: _buildTraceId(),
+        body: jsonEncode(payload),
       );
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(
-          'Failed to create contractor: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to create user account',
+          response: response,
         );
       }
 
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      return UserAccounts.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
     } catch (e) {
-      print('Error creating contractor: $e');
+      print('Error creating user account: $e');
+      rethrow;
+    }
+  }
+
+  /// Upload or replace the profile picture for the active user account.
+  Future<void> uploadUserProfilePicture({
+    required String accountId,
+    required String photoBase64,
+  }) async {
+    try {
+      final payload = {'profilePicture': photoBase64};
+
+      final response = await _sendWithAuthRetry(
+        method: 'PATCH',
+        uri: Uri.parse(
+          '$_gatewayUrl$_managementPath/user/accounts/profile-picture',
+        ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode != 200 &&
+          response.statusCode != 201 &&
+          response.statusCode != 202 &&
+          response.statusCode != 204) {
+        throw _buildApiException(
+          fallbackMessage: 'Failed to upload profile picture',
+          response: response,
+        );
+      }
+    } catch (e) {
+      print('Error uploading profile picture: $e');
       rethrow;
     }
   }
@@ -744,20 +866,20 @@ class ApiService {
     String? photoBase64,
   }) async {
     try {
+      final normalizedEmail = email.trim();
       final payload = {
-        'email': email,
+        if (normalizedEmail.isNotEmpty) 'email': normalizedEmail,
         'phoneNumber': phoneNumber,
         if (photoBase64 != null && photoBase64.isNotEmpty)
           'profilePicture': photoBase64,
       };
 
-      final response = await http.patch(
-        Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId'),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-          userId: contractorId,
-        ),
+      final response = await _sendWithAuthRetry(
+        method: 'PATCH',
+        uri: Uri.parse('$_gatewayUrl$_managementPath/contractor/$contractorId'),
+        accountId: accountId,
+        traceId: _buildTraceId(),
+        userId: contractorId,
         body: jsonEncode(payload),
       );
 
@@ -765,8 +887,9 @@ class ApiService {
           response.statusCode != 201 &&
           response.statusCode != 202 &&
           response.statusCode != 204) {
-        throw Exception(
-          'Failed to update contractor: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to update contractor',
+          response: response,
         );
       }
 
@@ -781,7 +904,7 @@ class ApiService {
               id: contractorId,
               contractorName: contractorName,
               contractorType: contractorType,
-              email: email,
+              email: normalizedEmail,
               phoneNumber: phoneNumber,
               accountId: accountId,
             );
@@ -799,12 +922,11 @@ class ApiService {
   /// Get single worker by ID
   Future<Worker?> getWorker(String workerId, {String? accountId}) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/workers/$workerId'),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-        ),
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse('$_gatewayUrl$_managementPath/workers/$workerId'),
+        accountId: accountId,
+        traceId: _buildTraceId(),
       );
 
       if (response.statusCode == 404) {
@@ -812,7 +934,10 @@ class ApiService {
       }
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to load worker: ${response.statusCode}');
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load worker',
+          response: response,
+        );
       }
 
       return Worker.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
@@ -828,12 +953,13 @@ class ApiService {
     String? accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_gatewayUrl$_managementPath/contractors/$contractorId'),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse(
+          '$_gatewayUrl$_managementPath/contractors/$contractorId',
         ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
       );
 
       if (response.statusCode == 404) {
@@ -841,7 +967,10 @@ class ApiService {
       }
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to load contractor: ${response.statusCode}');
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load contractor',
+          response: response,
+        );
       }
 
       return Contractor.fromJson(
@@ -856,13 +985,17 @@ class ApiService {
   /// Get all wallets from payment engine
   Future<List<Wallet>> getWallets({String? accountId}) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_gatewayUrl$_paymentPath/wallets'),
-        headers: await _getHeaders(accountId: accountId),
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse('$_gatewayUrl$_paymentPath/wallets'),
+        accountId: accountId,
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to load wallets: ${response.statusCode}');
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load wallets',
+          response: response,
+        );
       }
 
       final data = jsonDecode(response.body);
@@ -916,14 +1049,13 @@ class ApiService {
     String? accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse(
           '$_gatewayUrl$_managementPath/contractor/$contractorId/processes/$path',
         ),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-        ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
       );
 
       if (response.statusCode == 404) {
@@ -931,8 +1063,9 @@ class ApiService {
       }
 
       if (response.statusCode != 200) {
-        throw Exception(
-          'Failed to load contractor processes ($path): ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load contractor processes ($path)',
+          response: response,
         );
       }
 
@@ -968,20 +1101,20 @@ class ApiService {
     required ProcessRequest processRequest,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'POST',
+        uri: Uri.parse(
           '$_gatewayUrl$_managementPath/contractor/$contractorId/processes',
         ),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-        ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
         body: jsonEncode(processRequest.toJson()),
       );
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(
-          'Failed to create process: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to create process',
+          response: response,
         );
       }
 
@@ -999,19 +1132,19 @@ class ApiService {
     required String accountId,
   }) async {
     try {
-      final response = await http.delete(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'DELETE',
+        uri: Uri.parse(
           '$_gatewayUrl$_managementPath/contractor/$contractorId/processes/$processId',
         ),
-        headers: await _getHeaders(
-          accountId: accountId,
-          traceId: _buildTraceId(),
-        ),
+        accountId: accountId,
+        traceId: _buildTraceId(),
       );
 
       if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception(
-          'Failed to delete process: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to delete process',
+          response: response,
         );
       }
     } catch (e) {
@@ -1029,9 +1162,10 @@ class ApiService {
     required String accountId,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_gatewayUrl$_paymentPath/accounts/$accountId/cards'),
-        headers: await _getHeaders(accountId: accountId),
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse('$_gatewayUrl$_paymentPath/accounts/$accountId/cards'),
+        accountId: accountId,
       );
 
       if (response.statusCode != 200) {
@@ -1061,9 +1195,10 @@ class ApiService {
     required String expiry,
   }) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_gatewayUrl$_paymentPath/accounts/$accountId/cards'),
-        headers: await _getHeaders(accountId: accountId),
+      final response = await _sendWithAuthRetry(
+        method: 'POST',
+        uri: Uri.parse('$_gatewayUrl$_paymentPath/accounts/$accountId/cards'),
+        accountId: accountId,
         body: jsonEncode({
           'cardHolder': cardHolder,
           'cardNumber': cardNumber,
@@ -1072,8 +1207,9 @@ class ApiService {
       );
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(
-          'Failed to add payment card: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to add payment card',
+          response: response,
         );
       }
 
@@ -1090,16 +1226,18 @@ class ApiService {
     required String cardId,
   }) async {
     try {
-      final response = await http.delete(
-        Uri.parse(
+      final response = await _sendWithAuthRetry(
+        method: 'DELETE',
+        uri: Uri.parse(
           '$_gatewayUrl$_paymentPath/accounts/$accountId/cards/$cardId',
         ),
-        headers: await _getHeaders(accountId: accountId),
+        accountId: accountId,
       );
 
       if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception(
-          'Failed to delete payment card: ${response.statusCode} - ${response.body}',
+        throw _buildApiException(
+          fallbackMessage: 'Failed to delete payment card',
+          response: response,
         );
       }
     } catch (e) {

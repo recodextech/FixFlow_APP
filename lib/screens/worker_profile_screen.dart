@@ -42,6 +42,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   final Map<String, String> _jobStatusOverrides = {};
   final Set<String> _jobActionInProgress = {};
   bool _hasAvailability = false;
+  bool _hasPromptedAvailabilityCreation = false;
   List<WorkerAvailability> _availabilities = [];
   final Map<String, Contractor?> _contractorCache = {};
   final Set<String> _loadingContractorIds = {};
@@ -70,7 +71,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     // Initialize futures with empty lists/placeholders for lazy loading
     _pendingJobsFuture = Future.value([]);
     _historyJobsFuture = Future.value([]);
-    
+
     _loadProfileData();
   }
 
@@ -83,6 +84,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   void _loadProfileData() {
     setState(() {
       _hasAvailability = false;
+      _hasPromptedAvailabilityCreation = false;
       _availabilities = [];
     });
 
@@ -90,7 +92,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       widget.workerId,
       accountId: PreferencesService().getAccountId(),
     );
-    
+
     // First fetch only suggested jobs endpoint
     _jobSuggestionsFuture = _loadJobSuggestions();
     _loadAvailabilities();
@@ -112,6 +114,17 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       _availabilities = response.availabilities;
       _hasAvailability = response.availabilities.isNotEmpty;
     });
+
+    if (!_hasAvailability && !_hasPromptedAvailabilityCreation) {
+      _hasPromptedAvailabilityCreation = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+
+        _openAddAvailability();
+      });
+    }
 
     return response;
   }
@@ -186,7 +199,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                 '$totalWindows / 3 Windows used',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: totalWindows >= 3 ? AppColors.orange : AppColors.text2,
+                                  color: totalWindows >= 3
+                                      ? AppColors.orange
+                                      : AppColors.text2,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -213,7 +228,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Padding(
-                                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        12,
+                                        16,
+                                        4,
+                                      ),
                                       child: Row(
                                         children: [
                                           Expanded(
@@ -227,10 +247,15 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                           ),
                                           if (avail.frequency.isNotEmpty)
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 3,
+                                                  ),
                                               decoration: BoxDecoration(
                                                 color: AppColors.greenPale,
-                                                borderRadius: BorderRadius.circular(8),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                               ),
                                               child: Text(
                                                 avail.frequency,
@@ -250,31 +275,64 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                           padding: const EdgeInsets.all(8),
                                           decoration: BoxDecoration(
                                             color: AppColors.greenPale,
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                           ),
-                                          child: const Icon(Icons.schedule, color: AppColors.green, size: 20),
+                                          child: const Icon(
+                                            Icons.schedule,
+                                            color: AppColors.green,
+                                            size: 20,
+                                          ),
                                         ),
                                         title: Text(
-                                          DateFormat('EEEE, MMM d, HH:mm').format(window.startTime ?? DateTime.now()),
-                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                          DateFormat(
+                                            'EEEE, MMM d, HH:mm',
+                                          ).format(
+                                            window.startTime ?? DateTime.now(),
+                                          ),
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
-                                        subtitle: Text('${window.duration} hours duration'),
+                                        subtitle: Text(
+                                          '${window.duration} hours duration',
+                                        ),
                                         trailing: IconButton(
-                                          icon: const Icon(Icons.delete_outline, color: AppColors.red),
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: AppColors.red,
+                                          ),
                                           onPressed: () async {
                                             final confirmed = await showDialog<bool>(
                                               context: context,
                                               builder: (ctx) => AlertDialog(
-                                                title: const Text('Delete Window'),
-                                                content: const Text('Are you sure you want to delete this availability window?'),
+                                                title: const Text(
+                                                  'Delete Window',
+                                                ),
+                                                content: const Text(
+                                                  'Are you sure you want to delete this availability window?',
+                                                ),
                                                 actions: [
                                                   TextButton(
-                                                    onPressed: () => Navigator.pop(ctx, false),
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                          ctx,
+                                                          false,
+                                                        ),
                                                     child: const Text('Cancel'),
                                                   ),
                                                   TextButton(
-                                                    onPressed: () => Navigator.pop(ctx, true),
-                                                    style: TextButton.styleFrom(foregroundColor: AppColors.red),
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                          ctx,
+                                                          true,
+                                                        ),
+                                                    style: TextButton.styleFrom(
+                                                      foregroundColor:
+                                                          AppColors.red,
+                                                    ),
                                                     child: const Text('Delete'),
                                                   ),
                                                 ],
@@ -284,16 +342,24 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                             if (confirmed == true) {
                                               if (avail.id.isEmpty) {
                                                 if (!context.mounted) return;
-                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
                                                   const SnackBar(
-                                                    content: Text('Availability ID is missing. Please refresh and try again.'),
+                                                    content: Text(
+                                                      'Availability ID is missing. Please refresh and try again.',
+                                                    ),
                                                   ),
                                                 );
                                                 return;
                                               }
 
-                                              await _deleteAvailability(avail.id);
-                                              setModalState(() {}); // Refresh modal
+                                              await _deleteAvailability(
+                                                avail.id,
+                                              );
+                                              setModalState(
+                                                () {},
+                                              ); // Refresh modal
                                             }
                                           },
                                         ),
@@ -318,9 +384,15 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                   _openAddAvailability();
                                 },
                           icon: Icon(canAddMore ? Icons.add : Icons.block),
-                          label: Text(canAddMore ? 'Add More Availability' : 'Limit Reached (Max 3)'),
+                          label: Text(
+                            canAddMore
+                                ? 'Add More Availability'
+                                : 'Limit Reached (Max 3)',
+                          ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: canAddMore ? AppColors.green : AppColors.gray4,
+                            backgroundColor: canAddMore
+                                ? AppColors.green
+                                : AppColors.gray4,
                             foregroundColor: Colors.white,
                             elevation: 0,
                           ),
@@ -788,7 +860,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     if (_totalAvailabilityWindows >= 3) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Maximum of 3 availability windows reached. Please manage your availability.'),
+          content: Text(
+            'Maximum of 3 availability windows reached. Please manage your availability.',
+          ),
           backgroundColor: AppColors.orange,
         ),
       );
@@ -824,7 +898,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 48, color: AppColors.red),
+                  const Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: AppColors.red,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Error: ${snapshot.error}',
@@ -846,7 +924,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.person_outline, size: 48, color: AppColors.gray5),
+                  const Icon(
+                    Icons.person_outline,
+                    size: 48,
+                    color: AppColors.gray5,
+                  ),
                   const SizedBox(height: 16),
                   const Text('Worker profile not found'),
                   const SizedBox(height: 16),
@@ -993,15 +1075,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                 ],
               ),
               const SizedBox(height: 16),
-              
+
               // Profile info
               Row(
                 children: [
-                  ProfileAvatar(
-                    id: worker.id,
-                    isWorker: true,
-                    radius: 35,
-                  ),
+                  ProfileAvatar(id: worker.id, isWorker: true, radius: 35),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
@@ -1026,17 +1104,25 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                   spacing: 6,
                                   runSpacing: 4,
                                   children: [
-                                    ...worker.categories.take(2).map((category) {
+                                    ...worker.categories.take(2).map((
+                                      category,
+                                    ) {
                                       return Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 10,
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.2),
-                                          borderRadius: BorderRadius.circular(14),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.2,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
                                           border: Border.all(
-                                            color: Colors.white.withValues(alpha: 0.3),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.3,
+                                            ),
                                             width: 1,
                                           ),
                                         ),
@@ -1057,10 +1143,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                           vertical: 4,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(14),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.15,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
                                           border: Border.all(
-                                            color: Colors.white.withValues(alpha: 0.25),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.25,
+                                            ),
                                             width: 1,
                                           ),
                                         ),
@@ -1096,7 +1188,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                 ],
               ),
               const SizedBox(height: 20),
-              
+
               // Availability Card
               Container(
                 width: double.infinity,
@@ -1119,14 +1211,18 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: hasAvailability ? AppColors.greenPale : AppColors.orangePale,
+                            color: hasAvailability
+                                ? AppColors.greenPale
+                                : AppColors.orangePale,
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             hasAvailability
                                 ? Icons.event_available
                                 : Icons.event_busy,
-                            color: hasAvailability ? AppColors.green : AppColors.orange,
+                            color: hasAvailability
+                                ? AppColors.green
+                                : AppColors.orange,
                             size: 20,
                           ),
                         ),
@@ -1136,11 +1232,15 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                hasAvailability ? 'Availability Active' : 'No Availability Set',
+                                hasAvailability
+                                    ? 'Availability Active'
+                                    : 'No Availability Set',
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
-                                  color: hasAvailability ? AppColors.green : AppColors.orange,
+                                  color: hasAvailability
+                                      ? AppColors.green
+                                      : AppColors.orange,
                                 ),
                               ),
                               Text(
@@ -1162,12 +1262,17 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                             style: TextButton.styleFrom(
                               foregroundColor: AppColors.green,
                               backgroundColor: AppColors.greenPale,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
                               ),
                             ),
-                            child: const Text('Manage', style: TextStyle(fontWeight: FontWeight.bold)),
+                            child: const Text(
+                              'Manage',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
                       ],
                     ),
@@ -1179,10 +1284,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                         child: OutlinedButton.icon(
                           onPressed: _openAddAvailability,
                           icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add Availability Window', style: TextStyle(fontWeight: FontWeight.w600)),
+                          label: const Text(
+                            'Add Availability Window',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.green,
-                            side: const BorderSide(color: AppColors.green, width: 1.5),
+                            side: const BorderSide(
+                              color: AppColors.green,
+                              width: 1.5,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -1193,7 +1304,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                   ],
                 ),
               ),
-
             ],
           ),
         ),
@@ -1373,8 +1483,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final phone = job.contractorPhoneNumber.isNotEmpty
         ? job.contractorPhoneNumber
         : (isContractorLoading
-            ? 'Loading...'
-            : _resolveContractorPhone(contractor));
+              ? 'Loading...'
+              : _resolveContractorPhone(contractor));
     final canCall = phone != 'Loading...' && phone != 'Unavailable';
 
     return Container(
@@ -1417,7 +1527,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             Align(
               alignment: Alignment.centerRight,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.greenPale,
                   borderRadius: BorderRadius.circular(8),
@@ -1586,7 +1699,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             Align(
               alignment: Alignment.centerRight,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.greenPale,
                   borderRadius: BorderRadius.circular(8),
@@ -1710,10 +1826,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
     if (cleanPhone.isEmpty) return;
 
-    final Uri launchUri = Uri(
-      scheme: 'tel',
-      path: cleanPhone,
-    );
+    final Uri launchUri = Uri(scheme: 'tel', path: cleanPhone);
     try {
       if (await canLaunchUrl(launchUri)) {
         await launchUrl(launchUri);

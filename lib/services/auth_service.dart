@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -14,14 +15,17 @@ class AuthService {
 
   // Keycloak configuration — toggle between local and remote
   // static const String _host = 'localhost';           // local dev
-  static const String _host = 'noventispvt.xyz';        // remote server
+  static const String _host = 'noventispvt.xyz'; // remote server
 
-  static const String _issuer =
-      'https://$_host/realms/gateway-demo';
+  static const String _issuer = 'https://$_host/realms/gateway-demo';
   static const String _clientId = 'mobile-app';
-  static const String _redirectUri =
-      'com.recodextech.fixflow://callback';
-  static const List<String> _scopes = ['openid', 'email', 'profile'];
+  static const String _redirectUri = 'com.recodextech.fixflow://callback';
+  static const List<String> _scopes = [
+    'openid',
+    'email',
+    'profile',
+    'offline_access',
+  ];
 
   // Secure storage keys
   static const String _accessTokenKey = 'access_token';
@@ -30,6 +34,8 @@ class AuthService {
   static const String _userIdKey = 'auth_user_id';
   static const String _userEmailKey = 'auth_user_email';
   static const String _userNameKey = 'auth_user_name';
+
+  Completer<bool>? _refreshCompleter;
 
   /// Sign in with Google via Keycloak.
   /// Uses authorization code + PKCE flow.
@@ -64,9 +70,19 @@ class AuthService {
 
   /// Refresh the access token using the stored refresh token.
   Future<bool> refreshTokens() async {
+    if (_refreshCompleter != null) {
+      return _refreshCompleter!.future;
+    }
+
+    final completer = Completer<bool>();
+    _refreshCompleter = completer;
+
     try {
       final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
-      if (refreshToken == null) return false;
+      if (refreshToken == null) {
+        completer.complete(false);
+        return false;
+      }
 
       final result = await _appAuth.token(
         TokenRequest(
@@ -79,20 +95,55 @@ class AuthService {
       );
 
       if (result == null) {
+        completer.complete(false);
         return false;
       }
 
       final accessToken = result.accessToken;
       if (accessToken == null) {
+        completer.complete(false);
         return false;
       }
 
       await _storeTokens(result);
+      completer.complete(true);
       return true;
     } catch (e) {
       print('Token refresh error: $e');
+      completer.complete(false);
+      return false;
+    } finally {
+      _refreshCompleter = null;
+    }
+  }
+
+  /// Validate token state when app starts.
+  /// Uses access token if still valid, otherwise refreshes using refresh token.
+  Future<bool> validateSessionOnStartup() async {
+    final accessToken = await _secureStorage.read(key: _accessTokenKey);
+    final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
+
+    if (accessToken == null && refreshToken == null) {
       return false;
     }
+
+    if (accessToken != null) {
+      final expiryStr = await _secureStorage.read(key: _accessTokenExpiryKey);
+      final expiry = expiryStr != null ? DateTime.tryParse(expiryStr) : null;
+
+      if (expiry == null ||
+          expiry.isAfter(DateTime.now().add(const Duration(seconds: 30)))) {
+        return true;
+      }
+    }
+
+    if (refreshToken != null) {
+      final refreshed = await refreshTokens();
+      if (refreshed) return true;
+    }
+
+    await logout();
+    return false;
   }
 
   /// Get a valid access token — refreshes automatically if expired.
@@ -101,7 +152,9 @@ class AuthService {
     if (expiryStr != null) {
       final expiry = DateTime.tryParse(expiryStr);
       if (expiry != null &&
-          expiry.isBefore(DateTime.now().subtract(const Duration(seconds: 30)))) {
+          expiry.isBefore(
+            DateTime.now().subtract(const Duration(seconds: 30)),
+          )) {
         // Token expired or about to expire — refresh
         final refreshed = await refreshTokens();
         if (!refreshed) return null;
@@ -112,18 +165,7 @@ class AuthService {
 
   /// Check if the user is currently authenticated.
   Future<bool> isAuthenticated() async {
-    final token = await _secureStorage.read(key: _accessTokenKey);
-    if (token == null) return false;
-
-    // Try refreshing if token might be expired
-    final expiryStr = await _secureStorage.read(key: _accessTokenExpiryKey);
-    if (expiryStr != null) {
-      final expiry = DateTime.tryParse(expiryStr);
-      if (expiry != null && expiry.isBefore(DateTime.now())) {
-        return await refreshTokens();
-      }
-    }
-    return true;
+    return validateSessionOnStartup();
   }
 
   /// Logout — clear all stored tokens.
@@ -137,16 +179,13 @@ class AuthService {
   }
 
   /// Get stored user email.
-  Future<String?> getUserEmail() =>
-      _secureStorage.read(key: _userEmailKey);
+  Future<String?> getUserEmail() => _secureStorage.read(key: _userEmailKey);
 
   /// Get stored user name.
-  Future<String?> getUserName() =>
-      _secureStorage.read(key: _userNameKey);
+  Future<String?> getUserName() => _secureStorage.read(key: _userNameKey);
 
   /// Get stored Keycloak user ID (sub claim).
-  Future<String?> getUserId() =>
-      _secureStorage.read(key: _userIdKey);
+  Future<String?> getUserId() => _secureStorage.read(key: _userIdKey);
 
   // -- Private helpers --
 
@@ -160,13 +199,16 @@ class AuthService {
 
     if (result.refreshToken != null) {
       await _secureStorage.write(
-          key: _refreshTokenKey, value: result.refreshToken);
+        key: _refreshTokenKey,
+        value: result.refreshToken,
+      );
     }
 
     if (result.accessTokenExpirationDateTime != null) {
       await _secureStorage.write(
-          key: _accessTokenExpiryKey,
-          value: result.accessTokenExpirationDateTime!.toIso8601String());
+        key: _accessTokenExpiryKey,
+        value: result.accessTokenExpirationDateTime!.toIso8601String(),
+      );
     }
 
     // Decode JWT to extract user info
@@ -193,8 +235,8 @@ class AuthService {
 
       final sub = claims['sub'] as String?;
       final email = claims['email'] as String?;
-      final name = claims['name'] as String? ??
-          claims['preferred_username'] as String?;
+      final name =
+          claims['name'] as String? ?? claims['preferred_username'] as String?;
 
       if (sub != null) {
         await _secureStorage.write(key: _userIdKey, value: sub);

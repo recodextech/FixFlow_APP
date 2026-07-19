@@ -44,6 +44,7 @@ class ContractorInfoScreen extends StatefulWidget {
 }
 
 class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
+  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -54,7 +55,6 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
 
   String _contractorType = 'COMPANY';
   Uint8List? _selectedPhotoBytes;
-  bool _isSubmitting = false;
   bool _isFormInitialized = false;
   Contractor? _currentContractor;
   late Debouncer _saveDebouncer;
@@ -73,9 +73,9 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
 
   Future<Contractor?> _loadContractor() {
     return context.read<ContractorProvider>().getContractor(
-          widget.contractorId,
-          accountId: PreferencesService().getAccountId(),
-        );
+      widget.contractorId,
+      accountId: PreferencesService().getAccountId(),
+    );
   }
 
   void _populateForm(Contractor contractor) {
@@ -158,14 +158,14 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     try {
       final photoBase64 = JobPhotoUpload.toBase64(bytes);
       final updated = await context.read<ContractorProvider>().updateContractor(
-            contractorId: widget.contractorId,
-            accountId: accountId,
-            contractorName: _nameController.text.trim(),
-            contractorType: _contractorType,
-            email: _emailController.text.trim(),
-            phoneNumber: _phoneController.text.trim(),
-            photoBase64: photoBase64,
-          );
+        contractorId: widget.contractorId,
+        accountId: accountId,
+        contractorName: _nameController.text.trim(),
+        contractorType: _contractorType,
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        photoBase64: photoBase64,
+      );
 
       final savedContractor = updated.copyWith(photoBase64: photoBase64);
       PreferencesService().setContractorData(savedContractor);
@@ -180,92 +180,82 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update photo: \$e')),
-      );
+      _showTopError(_errorMessage(e));
     }
   }
 
-  Future<void> _saveContractor(Contractor contractor) async {
-    if (!_formKey.currentState!.validate()) {
-      return;
+  bool _isOptionalEmailValid(String email) {
+    return email.isEmpty || _emailPattern.hasMatch(email);
+  }
+
+  bool _canAutoSave() {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+
+    return name.isNotEmpty && phone.isNotEmpty && _isOptionalEmailValid(email);
+  }
+
+  String _errorMessage(Object error) {
+    if (error is ApiException) {
+      return error.message;
     }
 
-    final accountId = PreferencesService().getAccountId();
-    if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account ID not found')),
+    final message = error.toString().trim();
+    if (message.startsWith('Exception: ')) {
+      return message.substring('Exception: '.length);
+    }
+    return message;
+  }
+
+  void _showTopError(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentMaterialBanner()
+      ..showMaterialBanner(
+        MaterialBanner(
+          backgroundColor: AppColors.redPale,
+          leading: const Icon(Icons.error_outline, color: AppColors.red),
+          content: Text(message, style: const TextStyle(color: AppColors.text)),
+          actions: [
+            TextButton(
+              onPressed: messenger.hideCurrentMaterialBanner,
+              child: const Text('Dismiss'),
+            ),
+          ],
+        ),
       );
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-    });
-
-    try {
-      final currentPhoto = _selectedPhotoBytes == null
-          ? PreferencesService().getContractorPhotoBase64() ?? contractor.photoBase64
-          : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
-
-      final updated = await context.read<ContractorProvider>().updateContractor(
-            contractorId: widget.contractorId,
-            accountId: accountId,
-            contractorName: _nameController.text.trim(),
-            contractorType: _contractorType,
-            email: _emailController.text.trim(),
-            phoneNumber: _phoneController.text.trim(),
-            photoBase64: _selectedPhotoBytes != null ? currentPhoto : null,
-          );
-
-      final savedContractor = updated.copyWith(photoBase64: currentPhoto);
-      PreferencesService().setContractorData(savedContractor);
-
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(context).pop(savedContractor);
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update contractor: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
-    }
   }
 
   Future<void> _autoSaveContractor() async {
-    if (_currentContractor == null || !_isFormInitialized) return;
+    if (_currentContractor == null || !_isFormInitialized || !_canAutoSave()) {
+      return;
+    }
 
     final accountId = PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) return;
 
     try {
       final updated = await context.read<ContractorProvider>().updateContractor(
-            contractorId: widget.contractorId,
-            accountId: accountId,
-            contractorName: _nameController.text.trim(),
-            contractorType: _contractorType,
-            email: _emailController.text.trim(),
-            phoneNumber: _phoneController.text.trim(),
-            photoBase64: null, // Photo is updated separately via confirmation dialog
-          );
+        contractorId: widget.contractorId,
+        accountId: accountId,
+        contractorName: _nameController.text.trim(),
+        contractorType: _contractorType,
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        photoBase64:
+            null, // Photo is updated separately via confirmation dialog
+      );
 
       _currentContractor = updated;
       // Preserve the existing photo in preferences
       final existingPhoto = _selectedPhotoBytes != null
           ? JobPhotoUpload.toBase64(_selectedPhotoBytes!)
-          : PreferencesService().getContractorPhotoBase64() ?? _currentContractor!.photoBase64;
-      PreferencesService().setContractorData(updated.copyWith(photoBase64: existingPhoto));
+          : PreferencesService().getContractorPhotoBase64() ??
+                _currentContractor!.photoBase64;
+      PreferencesService().setContractorData(
+        updated.copyWith(photoBase64: existingPhoto),
+      );
 
       if (!mounted) return;
 
@@ -277,9 +267,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Auto-save failed: $e')),
-      );
+      _showTopError(_errorMessage(e));
     }
   }
 
@@ -300,8 +288,10 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                 children: [
                   Icon(Icons.error_outline, size: 48, color: AppColors.red),
                   const SizedBox(height: 12),
-                  Text('Error: ${snapshot.error}',
-                      style: const TextStyle(color: AppColors.text2)),
+                  Text(
+                    'Error: ${snapshot.error}',
+                    style: const TextStyle(color: AppColors.text2),
+                  ),
                   const SizedBox(height: 12),
                   ElevatedButton(
                     onPressed: () {
@@ -323,7 +313,11 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.business_outlined, size: 48, color: AppColors.gray5),
+                  Icon(
+                    Icons.business_outlined,
+                    size: 48,
+                    color: AppColors.gray5,
+                  ),
                   const SizedBox(height: 12),
                   const Text('Contractor not found'),
                   const SizedBox(height: 12),
@@ -339,7 +333,8 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
           _populateForm(contractor);
 
           final currentPhotoBase64 = _selectedPhotoBytes == null
-              ? PreferencesService().getContractorPhotoBase64() ?? contractor.photoBase64
+              ? PreferencesService().getContractorPhotoBase64() ??
+                    contractor.photoBase64
               : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
 
           return SingleChildScrollView(
@@ -365,8 +360,10 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                             children: [
                               GestureDetector(
                                 onTap: () => Navigator.pop(context),
-                                child: const Icon(Icons.arrow_back,
-                                    color: Colors.white),
+                                child: const Icon(
+                                  Icons.arrow_back,
+                                  color: Colors.white,
+                                ),
                               ),
                               const Spacer(),
                               const Text(
@@ -394,13 +391,14 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   clipBehavior: Clip.antiAlias,
-                                  child: (currentPhotoBase64 == null ||
+                                  child:
+                                      (currentPhotoBase64 == null ||
                                           currentPhotoBase64.isEmpty)
                                       ? Center(
                                           child: Text(
                                             contractor.contractorName.isNotEmpty
                                                 ? contractor.contractorName[0]
-                                                    .toUpperCase()
+                                                      .toUpperCase()
                                                 : 'C',
                                             style: const TextStyle(
                                               fontSize: 24,
@@ -412,21 +410,26 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                       : CachedMemoryImage(
                                           base64String: currentPhotoBase64,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            return Center(
-                                              child: Text(
-                                                contractor.contractorName.isNotEmpty
-                                                    ? contractor.contractorName[0]
-                                                        .toUpperCase()
-                                                    : 'C',
-                                                style: const TextStyle(
-                                                  fontSize: 24,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            );
-                                          },
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                                return Center(
+                                                  child: Text(
+                                                    contractor
+                                                            .contractorName
+                                                            .isNotEmpty
+                                                        ? contractor
+                                                              .contractorName[0]
+                                                              .toUpperCase()
+                                                        : 'C',
+                                                    style: const TextStyle(
+                                                      fontSize: 24,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
                                         ),
                                 ),
                               ),
@@ -448,8 +451,9 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                       contractor.contractorType,
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color:
-                                            Colors.white.withValues(alpha: 0.8),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.8,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -515,11 +519,16 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                   ),
                                   TextButton.icon(
                                     onPressed: _showPhotoSourceSheet,
-                                    icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                                    icon: const Icon(
+                                      Icons.camera_alt_outlined,
+                                      size: 18,
+                                    ),
                                     label: const Text('Photo'),
                                     style: TextButton.styleFrom(
                                       foregroundColor: AppColors.blue,
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -527,11 +536,14 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                               const SizedBox(height: 16),
                               TextFormField(
                                 controller: _nameController,
-                                onChanged: (_) => _saveDebouncer(_autoSaveContractor),
+                                onChanged: (_) =>
+                                    _saveDebouncer(_autoSaveContractor),
                                 decoration: InputDecoration(
                                   labelText: 'Business Name',
                                   hintText: 'Enter contractor name',
-                                  prefixIcon: const Icon(Icons.business_outlined),
+                                  prefixIcon: const Icon(
+                                    Icons.business_outlined,
+                                  ),
                                   filled: true,
                                   fillColor: AppColors.gray1,
                                   border: OutlineInputBorder(
@@ -558,31 +570,10 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                 },
                               ),
                               const SizedBox(height: 14),
-                              // Type toggle with better styling
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.gray1,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildTypeOption(
-                                          'COMPANY', 'Company', Icons.business),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _buildTypeOption(
-                                          'INDIVIDUAL', 'Individual', Icons.person),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 14),
                               TextFormField(
                                 controller: _emailController,
-                                onChanged: (_) => _saveDebouncer(_autoSaveContractor),
+                                onChanged: (_) =>
+                                    _saveDebouncer(_autoSaveContractor),
                                 decoration: InputDecoration(
                                   labelText: 'Email Address',
                                   hintText: 'Enter email',
@@ -607,10 +598,8 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                 ),
                                 keyboardType: TextInputType.emailAddress,
                                 validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'Please enter email';
-                                  }
-                                  if (!value.contains('@')) {
+                                  final email = value?.trim() ?? '';
+                                  if (!_isOptionalEmailValid(email)) {
                                     return 'Please enter a valid email';
                                   }
                                   return null;
@@ -619,7 +608,8 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                               const SizedBox(height: 14),
                               TextFormField(
                                 controller: _phoneController,
-                                onChanged: (_) => _saveDebouncer(_autoSaveContractor),
+                                onChanged: (_) =>
+                                    _saveDebouncer(_autoSaveContractor),
                                 decoration: InputDecoration(
                                   labelText: 'Phone Number',
                                   hintText: 'Enter phone number',
@@ -724,53 +714,6 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     );
   }
 
-  Widget _buildTypeOption(String value, String label, IconData icon) {
-    final selected = _contractorType == value;
-    return GestureDetector(
-      onTap: () {
-        setState(() => _contractorType = value);
-        _saveDebouncer(_autoSaveContractor);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.blue.withValues(alpha: 0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? AppColors.blue : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.blue : AppColors.gray3,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                size: 22,
-                color: selected ? Colors.white : AppColors.gray5,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? AppColors.blue : AppColors.text2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildWalletPointsSection() {
     return FutureBuilder<List<Wallet>>(
       future: _walletsFuture,
@@ -793,10 +736,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                 const SizedBox(width: 8),
                 const Text(
                   'No wallets found',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.text3,
-                  ),
+                  style: TextStyle(fontSize: 13, color: AppColors.text3),
                 ),
               ],
             ),
@@ -887,8 +827,6 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
       ),
     );
   }
-
-
 
   @override
   void dispose() {
