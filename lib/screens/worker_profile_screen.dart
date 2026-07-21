@@ -43,6 +43,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   final Set<String> _jobActionInProgress = {};
   bool _hasAvailability = false;
   bool _hasPromptedAvailabilityCreation = false;
+  bool _isAvailabilityScreenOpen = false;
   List<WorkerAvailability> _availabilities = [];
   final Map<String, Contractor?> _contractorCache = {};
   final Set<String> _loadingContractorIds = {};
@@ -85,6 +86,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     setState(() {
       _hasAvailability = false;
       _hasPromptedAvailabilityCreation = false;
+      _isAvailabilityScreenOpen = false;
       _availabilities = [];
     });
 
@@ -116,17 +118,34 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     });
 
     if (!_hasAvailability && !_hasPromptedAvailabilityCreation) {
-      _hasPromptedAvailabilityCreation = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-
-        _openAddAvailability();
-      });
+      _promptAddAvailabilityOnEntry();
     }
 
     return response;
+  }
+
+  void _promptAddAvailabilityOnEntry() {
+    if (!mounted || _hasAvailability || _hasPromptedAvailabilityCreation) {
+      return;
+    }
+
+    _hasPromptedAvailabilityCreation = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+
+      await _openAddAvailability();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (!_hasAvailability) {
+        _hasPromptedAvailabilityCreation = false;
+        _promptAddAvailabilityOnEntry();
+      }
+    });
   }
 
   Future<void> _deleteAvailability(String availabilityId) async {
@@ -857,6 +876,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   }
 
   Future<void> _openAddAvailability() async {
+    if (_isAvailabilityScreenOpen) {
+      return;
+    }
+
     if (_totalAvailabilityWindows >= 3) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -869,17 +892,46 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       return;
     }
 
-    final result = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) =>
-            CreateWorkerAvailabilityScreen(workerId: widget.workerId),
-      ),
-    );
+    _isAvailabilityScreenOpen = true;
+    try {
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) =>
+              CreateWorkerAvailabilityScreen(workerId: widget.workerId),
+        ),
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (result == true) {
-      setState(_loadProfileData);
+      if (result == true) {
+        setState(_loadProfileData);
+        return;
+      }
+
+      final refreshedResponse = await context
+          .read<WorkerProvider>()
+          .getWorkerAvailabilities(
+            workerId: widget.workerId,
+            accountId: PreferencesService().getAccountId(),
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _availabilities = refreshedResponse.availabilities;
+        _hasAvailability = refreshedResponse.availabilities.isNotEmpty;
+      });
+
+      if (!_hasAvailability) {
+        _hasPromptedAvailabilityCreation = false;
+        _promptAddAvailabilityOnEntry();
+      }
+    } finally {
+      if (mounted) {
+        _isAvailabilityScreenOpen = false;
+      }
     }
   }
 

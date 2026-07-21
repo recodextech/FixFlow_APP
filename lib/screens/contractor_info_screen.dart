@@ -44,10 +44,8 @@ class ContractorInfoScreen extends StatefulWidget {
 }
 
 class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
-  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
 
   late Future<Contractor?> _contractorFuture;
@@ -85,7 +83,6 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
 
     _currentContractor = contractor;
     _nameController.text = contractor.contractorName;
-    _emailController.text = contractor.email;
     _phoneController.text = contractor.phoneNumber;
     _contractorType = contractor.contractorType.isEmpty
         ? 'COMPANY'
@@ -162,7 +159,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
         accountId: accountId,
         contractorName: _nameController.text.trim(),
         contractorType: _contractorType,
-        email: _emailController.text.trim(),
+        email: '',
         phoneNumber: _phoneController.text.trim(),
         photoBase64: photoBase64,
       );
@@ -184,16 +181,11 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     }
   }
 
-  bool _isOptionalEmailValid(String email) {
-    return email.isEmpty || _emailPattern.hasMatch(email);
-  }
-
   bool _canAutoSave() {
     final name = _nameController.text.trim();
-    final email = _emailController.text.trim();
     final phone = _phoneController.text.trim();
 
-    return name.isNotEmpty && phone.isNotEmpty && _isOptionalEmailValid(email);
+    return name.isNotEmpty && phone.isNotEmpty;
   }
 
   String _errorMessage(Object error) {
@@ -241,7 +233,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
         accountId: accountId,
         contractorName: _nameController.text.trim(),
         contractorType: _contractorType,
-        email: _emailController.text.trim(),
+        email: '',
         phoneNumber: _phoneController.text.trim(),
         photoBase64:
             null, // Photo is updated separately via confirmation dialog
@@ -571,42 +563,6 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                               ),
                               const SizedBox(height: 14),
                               TextFormField(
-                                controller: _emailController,
-                                onChanged: (_) =>
-                                    _saveDebouncer(_autoSaveContractor),
-                                decoration: InputDecoration(
-                                  labelText: 'Email Address',
-                                  hintText: 'Enter email',
-                                  prefixIcon: const Icon(Icons.email_outlined),
-                                  filled: true,
-                                  fillColor: AppColors.gray1,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                      color: AppColors.blue,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 14,
-                                  ),
-                                ),
-                                keyboardType: TextInputType.emailAddress,
-                                validator: (value) {
-                                  final email = value?.trim() ?? '';
-                                  if (!_isOptionalEmailValid(email)) {
-                                    return 'Please enter a valid email';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
                                 controller: _phoneController,
                                 onChanged: (_) =>
                                     _saveDebouncer(_autoSaveContractor),
@@ -831,7 +787,6 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _emailController.dispose();
     _phoneController.dispose();
     _saveDebouncer.dispose();
     super.dispose();

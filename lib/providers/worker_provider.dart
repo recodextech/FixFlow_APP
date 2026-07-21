@@ -22,11 +22,18 @@ class WorkerProvider extends ChangeNotifier {
 
   /// Fetch categories
   Future<void> fetchCategories() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
     try {
       _categories = await _apiService.getCategories();
       notifyListeners();
     } catch (e) {
       _error = e.toString();
+      notifyListeners();
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }

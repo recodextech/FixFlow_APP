@@ -88,8 +88,9 @@ class ApiService {
       'Accept': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
       'user-id': userId != null && userId.isNotEmpty ? userId : _userId,
-      'account-id': ?resolvedAccountId,
-      'trace-id': ?traceId,
+      if (resolvedAccountId != null && resolvedAccountId.isNotEmpty)
+        'account-id': resolvedAccountId,
+      if (traceId != null && traceId.isNotEmpty) 'trace-id': traceId,
     };
   }
 
@@ -253,6 +254,7 @@ class ApiService {
     try {
       final normalizedEmail = email.trim();
       final payload = {
+        'workerCategories': workerCategories,
         if (normalizedEmail.isNotEmpty) 'email': normalizedEmail,
         'phoneNumber': phoneNumber,
         if (photoBase64 != null && photoBase64.isNotEmpty)

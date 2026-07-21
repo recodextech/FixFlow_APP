@@ -42,12 +42,10 @@ class WorkerDetailsScreen extends StatefulWidget {
 }
 
 class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
-  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
   final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
 
   late Future<Worker?> _workerFuture;
@@ -56,6 +54,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   Uint8List? _selectedPhotoBytes;
   bool _isSaving = false;
   bool _isFormInitialized = false;
+  bool _showCategoryEditor = false;
+  String? _activeParentType;
+  final Set<String> _selectedCategoryIds = <String>{};
   Worker? _currentWorker;
   late Debouncer _saveDebouncer;
 
@@ -67,6 +68,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       accountId: PreferencesService().getAccountId(),
     );
     _loadData();
+    _loadCategories();
   }
 
   void _loadData() {
@@ -74,10 +76,19 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     _availabilityFuture = _loadAvailabilities();
   }
 
+  void _loadCategories() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      context.read<WorkerProvider>().fetchCategories();
+    });
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
-    _emailController.dispose();
     _phoneController.dispose();
     _saveDebouncer.dispose();
     super.dispose();
@@ -127,8 +138,10 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
     _currentWorker = worker;
     _nameController.text = worker.workerName;
-    _emailController.text = worker.email;
     _phoneController.text = worker.phoneNumber;
+    _selectedCategoryIds
+      ..clear()
+      ..addAll(worker.workerCategories);
     _isFormInitialized = true;
   }
 
@@ -196,20 +209,36 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
     try {
       final photoBase64 = JobPhotoUpload.toBase64(bytes);
+      final allCategories = context.read<WorkerProvider>().categories;
+      final resolvedCategoryNames = _resolvedSelectedCategoryNames(
+        allCategories,
+      );
+      final workerCategories = _resolvedCategoryIdsFromNames(
+        allCategories,
+        resolvedCategoryNames.isNotEmpty
+            ? resolvedCategoryNames
+            : (_currentWorker?.workerCategories ?? const []),
+      );
+
+      if (workerCategories.isEmpty) {
+        _showTopError('Unable to resolve selected skills to category IDs.');
+        return;
+      }
+
       final updated = await context.read<WorkerProvider>().updateWorker(
         workerId: widget.workerId,
         accountId: accountId,
         workerName: _nameController.text.trim(),
-        email: _emailController.text.trim(),
+        email: '',
         phoneNumber: _phoneController.text.trim(),
-        workerCategories: _currentWorker?.workerCategories ?? [],
+        workerCategories: workerCategories,
         photoBase64: photoBase64,
       );
 
       PreferencesService().setWorkerData(
         updated.copyWith(photoBase64: photoBase64),
       );
-      _currentWorker = updated;
+      _currentWorker = updated.copyWith(photoBase64: photoBase64);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -224,16 +253,11 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     }
   }
 
-  bool _isOptionalEmailValid(String email) {
-    return email.isEmpty || _emailPattern.hasMatch(email);
-  }
-
   bool _canAutoSave() {
     final name = _nameController.text.trim();
-    final email = _emailController.text.trim();
     final phone = _phoneController.text.trim();
 
-    return name.isNotEmpty && phone.isNotEmpty && _isOptionalEmailValid(email);
+    return name.isNotEmpty && phone.isNotEmpty;
   }
 
   String _errorMessage(Object error) {
@@ -283,6 +307,22 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     setState(() => _isSaving = true);
 
     try {
+      final allCategories = context.read<WorkerProvider>().categories;
+      final resolvedCategoryNames = _resolvedSelectedCategoryNames(
+        allCategories,
+      );
+      final workerCategories = _resolvedCategoryIdsFromNames(
+        allCategories,
+        resolvedCategoryNames.isNotEmpty
+            ? resolvedCategoryNames
+            : worker.workerCategories,
+      );
+
+      if (workerCategories.isEmpty) {
+        _showTopError('Unable to resolve selected skills to category IDs.');
+        return;
+      }
+
       final currentPhoto = _selectedPhotoBytes == null
           ? PreferencesService().getWorkerPhotoBase64() ?? worker.photoBase64
           : JobPhotoUpload.toBase64(_selectedPhotoBytes!);
@@ -291,15 +331,16 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
         workerId: widget.workerId,
         accountId: accountId,
         workerName: _nameController.text.trim(),
-        email: _emailController.text.trim(),
+        email: '',
         phoneNumber: _phoneController.text.trim(),
-        workerCategories: worker.workerCategories,
+        workerCategories: workerCategories,
         photoBase64: _selectedPhotoBytes != null ? currentPhoto : null,
       );
 
       PreferencesService().setWorkerData(
         updated.copyWith(photoBase64: currentPhoto),
       );
+      _currentWorker = updated.copyWith(photoBase64: currentPhoto);
 
       if (!mounted) return;
 
@@ -329,13 +370,28 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     if (accountId == null || accountId.isEmpty) return;
 
     try {
+      final allCategories = context.read<WorkerProvider>().categories;
+      final resolvedCategoryNames = _resolvedSelectedCategoryNames(
+        allCategories,
+      );
+      final workerCategories = _resolvedCategoryIdsFromNames(
+        allCategories,
+        resolvedCategoryNames.isNotEmpty
+            ? resolvedCategoryNames
+            : _currentWorker!.workerCategories,
+      );
+
+      if (workerCategories.isEmpty) {
+        return;
+      }
+
       final updated = await context.read<WorkerProvider>().updateWorker(
         workerId: widget.workerId,
         accountId: accountId,
         workerName: _nameController.text.trim(),
-        email: _emailController.text.trim(),
+        email: '',
         phoneNumber: _phoneController.text.trim(),
-        workerCategories: _currentWorker!.workerCategories,
+        workerCategories: workerCategories,
         photoBase64:
             null, // Photo is updated separately via confirmation dialog
       );
@@ -362,6 +418,727 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       if (!mounted) return;
       _showTopError(_errorMessage(e));
     }
+  }
+
+  String _parentTypeLabel(String parentType) {
+    switch (parentType) {
+      case 'HOUSE_REPAIR':
+        return 'House Repair';
+      case 'GARDEN_WORKS':
+        return 'Garden Works';
+      case 'MAINTENANCE':
+        return 'Maintenance';
+      default:
+        return parentType
+            .replaceAll('_', ' ')
+            .toLowerCase()
+            .split(' ')
+            .map(
+              (word) => word.isEmpty
+                  ? word
+                  : '${word[0].toUpperCase()}${word.substring(1)}',
+            )
+            .join(' ');
+    }
+  }
+
+  IconData _parentTypeIcon(String parentType) {
+    switch (parentType) {
+      case 'HOUSE_REPAIR':
+        return Icons.home_repair_service;
+      case 'GARDEN_WORKS':
+        return Icons.grass;
+      case 'MAINTENANCE':
+        return Icons.settings;
+      default:
+        return Icons.category;
+    }
+  }
+
+  Color _parentTypeColor(String parentType) {
+    switch (parentType) {
+      case 'HOUSE_REPAIR':
+        return AppColors.brandGreen;
+      case 'GARDEN_WORKS':
+        return AppColors.brandGreenLight;
+      case 'MAINTENANCE':
+        return AppColors.brandGold;
+      default:
+        return AppColors.brandGreen;
+    }
+  }
+
+  List<String> _availableParentTypes(List<Category> categories) {
+    return categories
+        .map((category) => category.parentType?.trim())
+        .whereType<String>()
+        .where((parentType) => parentType.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  int _subcategoryCount(List<Category> categories, String parentType) {
+    return categories
+        .where((category) => category.parentType?.trim() == parentType)
+        .length;
+  }
+
+  List<Category> _categoriesForParent(
+    List<Category> categories,
+    String? parentType,
+  ) {
+    if (parentType == null) return const [];
+    return categories
+        .where((category) => category.parentType?.trim() == parentType)
+        .toList();
+  }
+
+  List<Category> _selectedCategoryObjects(List<Category> categories) {
+    return categories
+        .where((category) => _isCategorySelectedByName(category.name))
+        .toList();
+  }
+
+  bool _isCategorySelectedByName(String categoryName) {
+    final normalizedName = categoryName.trim().toLowerCase();
+    return _selectedCategoryIds.any(
+      (selectedValue) => selectedValue.trim().toLowerCase() == normalizedName,
+    );
+  }
+
+  List<String> _resolvedSelectedCategoryNames(List<Category> categories) {
+    if (_selectedCategoryIds.isEmpty) {
+      return const [];
+    }
+
+    final resolved = <String>[];
+    final availableNames = categories
+        .map((category) => category.name.trim().toLowerCase())
+        .toSet();
+
+    for (final selectedValue in _selectedCategoryIds) {
+      final trimmed = selectedValue.trim();
+      final normalized = trimmed.toLowerCase();
+      if (categories.isNotEmpty && !availableNames.contains(normalized)) {
+        continue;
+      }
+      if (!resolved.any((name) => name.trim().toLowerCase() == normalized)) {
+        resolved.add(trimmed);
+      }
+    }
+
+    return resolved;
+  }
+
+  List<String> _resolvedCategoryIdsFromNames(
+    List<Category> categories,
+    Iterable<String> selectedNames,
+  ) {
+    if (categories.isEmpty || selectedNames.isEmpty) {
+      return const [];
+    }
+
+    final resolvedIds = <String>[];
+
+    for (final selectedName in selectedNames) {
+      final normalizedName = selectedName.trim().toLowerCase();
+      if (normalizedName.isEmpty) {
+        continue;
+      }
+
+      Category? matchedCategory;
+      for (final category in categories) {
+        if (category.name.trim().toLowerCase() == normalizedName) {
+          matchedCategory = category;
+          break;
+        }
+      }
+
+      if (matchedCategory == null) {
+        continue;
+      }
+
+      final id = matchedCategory.id.trim();
+      if (id.isEmpty) {
+        continue;
+      }
+
+      final exists = resolvedIds.any(
+        (savedId) => savedId.toLowerCase() == id.toLowerCase(),
+      );
+      if (!exists) {
+        resolvedIds.add(id);
+      }
+    }
+
+    return resolvedIds;
+  }
+
+  List<String> _invalidSelectedCategoryValues(List<Category> categories) {
+    final invalidValues = <String>[];
+    final availableNames = categories
+        .map((category) => category.name.trim().toLowerCase())
+        .toSet();
+
+    for (final rawValue in _selectedCategoryIds) {
+      final trimmed = rawValue.trim();
+      final normalized = trimmed.toLowerCase();
+      final existsInCategories =
+          categories.isEmpty || availableNames.contains(normalized);
+
+      if (!existsInCategories &&
+          trimmed.isNotEmpty &&
+          !invalidValues.contains(trimmed)) {
+        invalidValues.add(trimmed);
+      }
+    }
+
+    return invalidValues;
+  }
+
+  void _toggleParentType(String parentType) {
+    setState(() {
+      _activeParentType = _activeParentType == parentType ? null : parentType;
+    });
+  }
+
+  void _toggleCategorySelection(Category category) {
+    final normalizedName = category.name.trim().toLowerCase();
+
+    setState(() {
+      final isSelected = _isCategorySelectedByName(category.name);
+
+      if (isSelected) {
+        _selectedCategoryIds.removeWhere((selectedValue) {
+          final normalized = selectedValue.trim().toLowerCase();
+          return normalized == normalizedName;
+        });
+      } else {
+        _selectedCategoryIds.add(category.name.trim());
+      }
+    });
+  }
+
+  void _showCategoryDescription(Category category) {
+    final description = category.description.trim();
+    if (description.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No description available for this category.'),
+        ),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(category.name),
+        content: Text(description),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryInfoButton(Category category) {
+    return IconButton(
+      tooltip: 'Category description',
+      icon: const Icon(
+        Icons.help_outline,
+        size: 18,
+        color: AppColors.brandGreen,
+      ),
+      splashRadius: 18,
+      onPressed: () => _showCategoryDescription(category),
+    );
+  }
+
+  Future<void> _updateCategories() async {
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null || accountId.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Account ID not found')));
+      return;
+    }
+
+    if (_selectedCategoryIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one skill.')),
+      );
+      return;
+    }
+
+    final currentWorker = _currentWorker;
+    if (currentWorker == null) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final categories = context.read<WorkerProvider>().categories;
+      final workerCategories = _resolvedSelectedCategoryNames(categories);
+      final invalidValues = _invalidSelectedCategoryValues(categories);
+
+      if (workerCategories.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select valid skills before updating.'),
+          ),
+        );
+        return;
+      }
+
+      if (invalidValues.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Some selected values are not valid category names. Please reselect skills.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final workerCategoryIds = _resolvedCategoryIdsFromNames(
+        categories,
+        workerCategories,
+      );
+
+      if (workerCategoryIds.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to resolve selected skills to category IDs. Please retry.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final updated = await context.read<WorkerProvider>().updateWorker(
+        workerId: widget.workerId,
+        accountId: accountId,
+        workerName: _nameController.text.trim(),
+        email: '',
+        phoneNumber: _phoneController.text.trim(),
+        workerCategories: workerCategoryIds,
+        photoBase64: currentWorker.photoBase64,
+      );
+
+      _currentWorker = updated.copyWith(photoBase64: currentWorker.photoBase64);
+      PreferencesService().setWorkerData(_currentWorker!);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Worker skills updated successfully')),
+      );
+      setState(() {
+        _showCategoryEditor = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update skills: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Widget _buildCategorySection() {
+    return Consumer<WorkerProvider>(
+      builder: (context, provider, _) {
+        final allCategories = provider.categories;
+        final selectedCategories = _selectedCategoryObjects(allCategories);
+        final selectedSkillLabels = selectedCategories
+            .map((category) => category.name)
+            .toList();
+        final invalidSelectedValues = _invalidSelectedCategoryValues(
+          allCategories,
+        );
+        final resolvedSelectedNames = _resolvedSelectedCategoryNames(
+          allCategories,
+        );
+        final parentTypes = _availableParentTypes(allCategories);
+
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.gray2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.greenPale,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.category_outlined,
+                      color: AppColors.green,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Skills',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: allCategories.isEmpty
+                        ? null
+                        : () {
+                            setState(() {
+                              _showCategoryEditor = !_showCategoryEditor;
+                              if (_showCategoryEditor &&
+                                  _activeParentType == null &&
+                                  parentTypes.isNotEmpty) {
+                                _activeParentType = parentTypes.first;
+                              }
+                            });
+                          },
+                    icon: Icon(
+                      _showCategoryEditor ? Icons.expand_less : Icons.edit,
+                      size: 18,
+                    ),
+                    label: Text(_showCategoryEditor ? 'Hide' : 'Update'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Selected skills are shown below. Open the editor to add or remove skills.',
+                style: TextStyle(fontSize: 12, color: AppColors.text3),
+              ),
+              if (invalidSelectedValues.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.orangePale,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'Some stored skills are invalid (category names not found). Re-select valid skills and update.',
+                    style: TextStyle(fontSize: 12, color: AppColors.text2),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              if (selectedSkillLabels.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.gray1,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'No skills selected.',
+                    style: TextStyle(fontSize: 13, color: AppColors.text2),
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: selectedSkillLabels.map((label) {
+                    final matchingCategories = selectedCategories
+                        .where((item) => item.name == label)
+                        .toList();
+                    final category = matchingCategories.isEmpty
+                        ? null
+                        : matchingCategories.first;
+
+                    return InputChip(
+                      label: Text(label),
+                      avatar: category == null
+                          ? null
+                          : _buildCategoryInfoButton(category),
+                      onPressed: category == null
+                          ? null
+                          : () => _showCategoryDescription(category),
+                      backgroundColor: AppColors.greenPale,
+                      side: BorderSide.none,
+                    );
+                  }).toList(),
+                ),
+              if (_showCategoryEditor) ...[
+                const SizedBox(height: 16),
+                if (provider.isLoading && allCategories.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (allCategories.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'No skill types available',
+                      style: TextStyle(fontSize: 13, color: Colors.black54),
+                    ),
+                  )
+                else
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: parentTypes.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final parentType = entry.value;
+                          final count = _subcategoryCount(
+                            allCategories,
+                            parentType,
+                          );
+                          final selected = _activeParentType == parentType;
+                          final color = _parentTypeColor(parentType);
+
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                right: index == parentTypes.length - 1 ? 0 : 10,
+                              ),
+                              child: InkWell(
+                                onTap: count > 0
+                                    ? () => _toggleParentType(parentType)
+                                    : null,
+                                borderRadius: BorderRadius.circular(14),
+                                child: Opacity(
+                                  opacity: count > 0 ? 1 : 0.45,
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    curve: Curves.easeOut,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: selected
+                                          ? Color.lerp(
+                                              Colors.white,
+                                              color,
+                                              0.14,
+                                            )
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: selected
+                                            ? color
+                                            : Colors.grey.shade300,
+                                        width: selected ? 1.8 : 1,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          _parentTypeIcon(parentType),
+                                          color: selected
+                                              ? color
+                                              : Colors.black54,
+                                          size: 26,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          _parentTypeLabel(parentType),
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: selected
+                                                ? color
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Text(
+                                          '$count',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                            color: selected
+                                                ? color
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                        Text(
+                                          'subcategories',
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            color: Colors.grey.shade700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_activeParentType == null)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.brandGreen.withValues(
+                                alpha: 0.25,
+                              ),
+                            ),
+                          ),
+                          child: const Text(
+                            'Select a skill type above to see subcategories.',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: Colors.black54,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${_parentTypeLabel(_activeParentType!)} Subcategories',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              constraints: const BoxConstraints(maxHeight: 180),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: ListView.separated(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: _categoriesForParent(
+                                  allCategories,
+                                  _activeParentType,
+                                ).length,
+                                separatorBuilder: (_, index) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final categories = _categoriesForParent(
+                                    allCategories,
+                                    _activeParentType,
+                                  );
+                                  final category = categories[index];
+                                  final selected = _isCategorySelectedByName(
+                                    category.name,
+                                  );
+
+                                  return CheckboxListTile(
+                                    dense: true,
+                                    value: selected,
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    title: Text(category.name),
+                                    subtitle:
+                                        category.description.trim().isEmpty
+                                        ? null
+                                        : Text(
+                                            category.description,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                    secondary: _buildCategoryInfoButton(
+                                      category,
+                                    ),
+                                    onChanged: (_) =>
+                                        _toggleCategorySelection(category),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: ElevatedButton.icon(
+                          onPressed:
+                              _isSaving ||
+                                  resolvedSelectedNames.isEmpty ||
+                                  invalidSelectedValues.isNotEmpty
+                              ? null
+                              : _updateCategories,
+                          icon: _isSaving
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.save_outlined),
+                          label: const Text('Update Skills'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.green,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -596,23 +1373,6 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                             ),
                             const SizedBox(height: 12),
                             TextFormField(
-                              controller: _emailController,
-                              onChanged: (_) => _saveDebouncer(_autoSaveWorker),
-                              keyboardType: TextInputType.emailAddress,
-                              decoration: const InputDecoration(
-                                labelText: 'Email',
-                                prefixIcon: Icon(Icons.email_outlined),
-                              ),
-                              validator: (value) {
-                                final email = value?.trim() ?? '';
-                                if (!_isOptionalEmailValid(email)) {
-                                  return 'Enter a valid email';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
                               controller: _phoneController,
                               onChanged: (_) => _saveDebouncer(_autoSaveWorker),
                               keyboardType: TextInputType.phone,
@@ -629,39 +1389,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      // Categories
-                      const Text(
-                        'Categories',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.text,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (worker.categories.isEmpty)
-                        const Text(
-                          'No categories assigned',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.text3,
-                          ),
-                        )
-                      else
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: worker.categories.map((category) {
-                            return Chip(
-                              label: Text(
-                                category,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                              backgroundColor: AppColors.greenPale,
-                              side: BorderSide.none,
-                            );
-                          }).toList(),
-                        ),
+                      _buildCategorySection(),
                       const SizedBox(height: 24),
                       // Wallets
                       Container(
