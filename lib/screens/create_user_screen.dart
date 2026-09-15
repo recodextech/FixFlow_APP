@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/worker.dart';
 import '../models/user_accounts.dart';
@@ -448,6 +449,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                         controller: _emailController,
                         decoration: const InputDecoration(
                           labelText: 'Email',
+                          hintText: 'example@gmail.com',
                           prefixIcon: Icon(Icons.email_outlined),
                         ),
                         keyboardType: TextInputType.emailAddress,
@@ -456,7 +458,10 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                           if (trimmed.isEmpty) {
                             return 'Please enter email';
                           }
-                          if (!trimmed.contains('@')) {
+                          final emailRegex = RegExp(
+                            r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$',
+                          );
+                          if (!emailRegex.hasMatch(trimmed)) {
                             return 'Please enter a valid email';
                           }
                           return null;
@@ -468,12 +473,19 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                       controller: _phoneController,
                       decoration: const InputDecoration(
                         labelText: 'Phone Number *',
+                        hintText: '07xxxxxxxx',
                         prefixIcon: Icon(Icons.phone_outlined),
                       ),
                       keyboardType: TextInputType.phone,
+                      maxLength: 10,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
+                        final trimmed = value?.trim() ?? '';
+                        if (trimmed.isEmpty) {
                           return 'Please enter phone number';
+                        }
+                        if (!RegExp(r'^0\d{9}$').hasMatch(trimmed)) {
+                          return 'Enter a valid 10 digit number e.g. 07xxxxxxxx';
                         }
                         return null;
                       },

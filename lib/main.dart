@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'theme.dart';
 import 'screens/login_screen.dart';
@@ -9,11 +11,21 @@ import 'providers/contractor_provider.dart';
 import 'services/preferences_service.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
+import 'services/notification_service.dart';
+
+final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    await Firebase.initializeApp();
+    await NotificationService.initialize(scaffoldMessengerKey);
+  }
   await PreferencesService().init();
   runApp(const MyApp());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    NotificationService.showPendingMessage();
+  });
 }
 
 class MyApp extends StatelessWidget {
@@ -29,6 +41,7 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'FixFlow',
+        scaffoldMessengerKey: scaffoldMessengerKey,
         theme: buildAppTheme(),
         home: const _AuthGate(),
         routes: {

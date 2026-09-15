@@ -30,7 +30,7 @@ class ApiException implements Exception {
 
 class ApiService {
   // All API calls route through KrakenD gateway
-  static const String _gatewayUrl = 'http://noventispvt.xyz:8081';
+  static const String _gatewayUrl = 'https://noventispvt.xyz';
 
   // Gateway path prefixes for each backend service
   static const String _managementPath = '/api/v1/management';

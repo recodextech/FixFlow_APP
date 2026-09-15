@@ -903,11 +903,6 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
       if (!mounted) return;
 
-      if (result == true) {
-        setState(_loadProfileData);
-        return;
-      }
-
       final refreshedResponse = await context
           .read<WorkerProvider>()
           .getWorkerAvailabilities(
@@ -923,6 +918,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         _availabilities = refreshedResponse.availabilities;
         _hasAvailability = refreshedResponse.availabilities.isNotEmpty;
       });
+
+      if (result == true) {
+        return;
+      }
 
       if (!_hasAvailability) {
         _hasPromptedAvailabilityCreation = false;

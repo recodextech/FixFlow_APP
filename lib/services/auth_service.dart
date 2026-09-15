@@ -17,7 +17,8 @@ class AuthService {
   // static const String _host = 'localhost';           // local dev
   static const String _host = 'noventispvt.xyz'; // remote server
 
-  static const String _issuer = 'https://$_host/realms/gateway-demo';
+  static const String _issuer =
+      'https://$_host/keycloak/realms/noventis-gateway';
   static const String _clientId = 'mobile-app';
   static const String _redirectUri = 'com.recodextech.fixflow://callback';
   static const List<String> _scopes = [
