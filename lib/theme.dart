@@ -41,9 +41,9 @@ class AppColors {
   ];
 
   static const contractorGradient = [
-    Color(0xFF0D47A1),
-    Color(0xFF1565C0),
-    Color(0xFF1E88E5),
+    Color(0xFFE8881C),
+    Color(0xFFF59E2D),
+    Color(0xFFFBB03B),
   ];
 
   static const loginGradient = [

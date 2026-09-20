@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "196388884121",
+    "project_id": "fixflow-504116",
+    "storage_bucket": "fixflow-504116.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:196388884121:android:7ae5e36a96e3795fc43208",
+        "android_client_info": {
+          "package_name": "com.noventispvt.fixflow"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "196388884121-l0lqp2fh3ba7cpa7srjasp9ki9a588ad.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyClpFeX9XblIHE1skiccJzlFWiq8IoO65w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "196388884121-l0lqp2fh3ba7cpa7srjasp9ki9a588ad.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

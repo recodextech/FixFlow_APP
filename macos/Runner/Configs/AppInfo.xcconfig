@@ -8,7 +8,7 @@
 PRODUCT_NAME = fixflow_app
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.recodextech.fixflowApp
+PRODUCT_BUNDLE_IDENTIFIER = com.noventispvt.fixflow
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.recodextech. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Noventis Pvt. All rights reserved.

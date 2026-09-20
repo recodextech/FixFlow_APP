@@ -68,18 +68,21 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         '&countrycodes=lk'
         '&viewbox=$_slWest,$_slNorth,$_slEast,$_slSouth&bounded=1',
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'fixflow_app/1.0',
-      });
+      final response = await http.get(
+        uri,
+        headers: {'User-Agent': 'fixflow_app/1.0'},
+      );
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body) as List;
         setState(() {
           _searchResults = data
-              .map((item) => _SearchResult(
-                    displayName: item['display_name'] as String,
-                    lat: double.parse(item['lat'] as String),
-                    lon: double.parse(item['lon'] as String),
-                  ))
+              .map(
+                (item) => _SearchResult(
+                  displayName: item['display_name'] as String,
+                  lat: double.parse(item['lat'] as String),
+                  lon: double.parse(item['lon'] as String),
+                ),
+              )
               .toList();
         });
       }
@@ -96,9 +99,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         'https://nominatim.openstreetmap.org/reverse'
         '?lat=${point.latitude}&lon=${point.longitude}&format=json',
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'fixflow_app/1.0',
-      });
+      final response = await http.get(
+        uri,
+        headers: {'User-Agent': 'fixflow_app/1.0'},
+      );
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final display = data['display_name'] as String?;
@@ -136,8 +140,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, _pickedLocation),
-            child: const Text('Done',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Done',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -155,21 +161,23 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     ? const Padding(
                         padding: EdgeInsets.all(12),
                         child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2)),
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
                       )
                     : _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchResults = []);
-                            },
-                          )
-                        : null,
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchResults = []);
+                        },
+                      )
+                    : null,
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               ),
             ),
@@ -181,7 +189,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(10)),
+                  bottom: Radius.circular(10),
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
@@ -198,8 +207,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   final result = _searchResults[index];
                   return ListTile(
                     dense: true,
-                    leading:
-                        const Icon(Icons.location_on, size: 20, color: Colors.red),
+                    leading: const Icon(
+                      Icons.location_on,
+                      size: 20,
+                      color: Colors.red,
+                    ),
                     title: Text(
                       result.displayName,
                       maxLines: 2,
@@ -221,8 +233,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   Expanded(
                     child: Text(
                       _address,
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -243,9 +254,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.recodextech.fixflow_app',
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.noventispvt.fixflow',
                 ),
                 MarkerLayer(
                   markers: [

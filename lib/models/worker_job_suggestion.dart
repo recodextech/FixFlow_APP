@@ -1,9 +1,7 @@
 class WorkerJobSuggestionResponse {
   final List<WorkerJobSuggestion> availableJobs;
 
-  const WorkerJobSuggestionResponse({
-    required this.availableJobs,
-  });
+  const WorkerJobSuggestionResponse({required this.availableJobs});
 
   factory WorkerJobSuggestionResponse.fromJson(Map<String, dynamic> json) {
     final jobs = (json['availableJobs'] as List<dynamic>? ?? [])
@@ -39,6 +37,7 @@ class WorkerJobSuggestion {
 class SuggestedJobInformation {
   final String jobId;
   final String jobStatus;
+  final String jobDescription;
   final double jobLatitude;
   final double jobLongitude;
   final String rawJobStartTime;
@@ -48,11 +47,13 @@ class SuggestedJobInformation {
   final String contractorId;
   final String contractorCompany;
   final String processId;
+  final String processDescription;
   final double jobPaymentAmount;
 
   const SuggestedJobInformation({
     required this.jobId,
     required this.jobStatus,
+    required this.jobDescription,
     required this.jobLatitude,
     required this.jobLongitude,
     required this.rawJobStartTime,
@@ -62,6 +63,7 @@ class SuggestedJobInformation {
     required this.contractorId,
     required this.contractorCompany,
     required this.processId,
+    required this.processDescription,
     required this.jobPaymentAmount,
   });
 
@@ -74,6 +76,8 @@ class SuggestedJobInformation {
     return SuggestedJobInformation(
       jobId: (json['jobId'] ?? '').toString(),
       jobStatus: (json['jobStatus'] ?? '').toString(),
+      jobDescription: (json['jobDescription'] ?? json['description'] ?? '')
+          .toString(),
       jobLatitude: _toDouble(json['jobLatitude']),
       jobLongitude: _toDouble(json['jobLongitude']),
       rawJobStartTime: rawStartTime,
@@ -83,6 +87,7 @@ class SuggestedJobInformation {
       contractorId: (json['contractorId'] ?? '').toString(),
       contractorCompany: (json['contractorCompany'] ?? '').toString(),
       processId: (json['processId'] ?? '').toString(),
+      processDescription: (json['processDescription'] ?? '').toString(),
       jobPaymentAmount: _toDouble(json['jobPaymentAmount']),
     );
   }

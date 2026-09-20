@@ -36,9 +36,9 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
   final _formKey = GlobalKey<FormState>();
   final _processNameController = TextEditingController();
+  final _processDescriptionController = TextEditingController();
 
   // Job fields
-  final _jobDescriptionController = TextEditingController();
   final _startTimeController = TextEditingController();
   final _durationController = TextEditingController();
   final _amountController = TextEditingController();
@@ -357,7 +357,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
     try {
       final job = Job(
-        description: _jobDescriptionController.text.trim(),
+        description: '',
         startTime: _startTimeController.text.trim(),
         duration: int.parse(_durationController.text.trim()),
         latitude: _selectedLocation.latitude,
@@ -372,6 +372,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
       final processRequest = ProcessRequest(
         name: _processNameController.text.trim(),
+        description: _processDescriptionController.text.trim(),
         jobs: [job],
       );
 
@@ -443,7 +444,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
   bool get _canCreateJob {
     final hasJobName = _processNameController.text.trim().isNotEmpty;
-    final hasDescription = _jobDescriptionController.text.trim().isNotEmpty;
+    final hasDescription = _processDescriptionController.text.trim().isNotEmpty;
     final hasStartTime = _startTimeController.text.trim().isNotEmpty;
     final hasDuration =
         int.tryParse(_durationController.text.trim()) != null &&
@@ -532,25 +533,29 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         TextFormField(
           controller: _processNameController,
           decoration: const InputDecoration(
-            labelText: 'Job Name',
+            labelText: 'Job Title',
+            hintText: 'Enter a short job title',
             border: OutlineInputBorder(),
           ),
           onChanged: (_) => setState(() {}),
+          maxLength: 80,
           validator: (value) => (value == null || value.trim().isEmpty)
-              ? 'Please enter job name'
+              ? 'Please enter a job title'
               : null,
         ),
         const SizedBox(height: 12),
         TextFormField(
-          controller: _jobDescriptionController,
+          controller: _processDescriptionController,
           decoration: const InputDecoration(
-            labelText: 'Job Description',
+            labelText: 'Process Description',
+            hintText: 'Describe the overall service or process',
             border: OutlineInputBorder(),
           ),
+          maxLength: 100,
           maxLines: 2,
           onChanged: (_) => setState(() {}),
           validator: (value) => (value == null || value.trim().isEmpty)
-              ? 'Please enter job description'
+              ? 'Please enter process description'
               : null,
         ),
         const SizedBox(height: 12),
@@ -829,7 +834,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                     TileLayer(
                       urlTemplate:
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.recodextech.fixflow_app',
+                      userAgentPackageName: 'com.noventispvt.fixflow',
                     ),
                     MarkerLayer(
                       markers: [
@@ -1128,7 +1133,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   void dispose() {
     _mapController.dispose();
     _processNameController.dispose();
-    _jobDescriptionController.dispose();
+    _processDescriptionController.dispose();
     _startTimeController.dispose();
     _durationController.dispose();
     _amountController.dispose();

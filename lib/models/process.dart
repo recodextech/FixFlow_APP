@@ -7,17 +7,21 @@ import 'payment.dart';
 
 class ProcessRequest {
   final String name;
+  final String description;
   final List<Job> jobs;
 
   ProcessRequest({
     required this.name,
+    this.description = '',
     required this.jobs,
   });
 
   factory ProcessRequest.fromJson(Map<String, dynamic> json) {
     return ProcessRequest(
       name: json['name'] ?? '',
-      jobs: (json['jobs'] as List<dynamic>?)
+      description: json['description'] ?? '',
+      jobs:
+          (json['jobs'] as List<dynamic>?)
               ?.map((j) => Job.fromJson(j as Map<String, dynamic>))
               .toList() ??
           [],
@@ -27,6 +31,7 @@ class ProcessRequest {
   Map<String, dynamic> toJson() {
     return {
       'name': name,
+      'description': description,
       'jobs': jobs.map((j) => j.toJson()).toList(),
     };
   }
@@ -63,10 +68,14 @@ class ContractorProcessJobSummary {
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
       jobStartTime: json['jobStartTime'] ?? json['startTime'] ?? '',
       durationHours: json['durationHours'] ?? json['duration'] ?? 0,
-      assignedWorkerId: (json['assignedWorkerId'] ?? json['workerId'] ?? '').toString(),
-      assignedWorkerName: (json['assignedWorkerName'] ?? json['workerName'] ?? '').toString(),
+      assignedWorkerId: (json['assignedWorkerId'] ?? json['workerId'] ?? '')
+          .toString(),
+      assignedWorkerName:
+          (json['assignedWorkerName'] ?? json['workerName'] ?? '').toString(),
       paymentInformation: json['paymentInformation'] is Map<String, dynamic>
-          ? PaymentInformation.fromJson(json['paymentInformation'] as Map<String, dynamic>)
+          ? PaymentInformation.fromJson(
+              json['paymentInformation'] as Map<String, dynamic>,
+            )
           : null,
     );
   }
@@ -91,7 +100,9 @@ class ContractorProcessSummary {
       name: json['name'] ?? '',
       status: json['status'] ?? '',
       job: json['job'] is Map<String, dynamic>
-          ? ContractorProcessJobSummary.fromJson(json['job'] as Map<String, dynamic>)
+          ? ContractorProcessJobSummary.fromJson(
+              json['job'] as Map<String, dynamic>,
+            )
           : null,
     );
   }

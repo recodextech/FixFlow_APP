@@ -1392,7 +1392,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             padding: const EdgeInsets.all(16),
             itemCount: suggestions.length,
             itemBuilder: (context, index) =>
-                _buildSuggestedJobCard(suggestions[index], index + 1),
+                _buildSuggestedJobCard(suggestions[index]),
           ),
         );
       },
@@ -1430,7 +1430,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             padding: const EdgeInsets.all(16),
             itemCount: pendingJobs.length,
             itemBuilder: (context, index) =>
-                _buildPendingJobCard(pendingJobs[index], index + 1),
+                _buildPendingJobCard(pendingJobs[index]),
           ),
         );
       },
@@ -1468,7 +1468,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             padding: const EdgeInsets.all(16),
             itemCount: historyJobs.length,
             itemBuilder: (context, index) =>
-                _buildPendingJobCard(historyJobs[index], index + 1),
+                _buildPendingJobCard(historyJobs[index]),
           ),
         );
       },
@@ -1523,7 +1523,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
-  Widget _buildPendingJobCard(WorkerAssignedJob job, int index) {
+  Widget _buildPendingJobCard(WorkerAssignedJob job) {
     final status = _resolvePendingJobStatus(job);
     _loadContractorContactIfNeeded(job.contractorId);
     final contractor = _contractorCache[job.contractorId];
@@ -1537,6 +1537,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               ? 'Loading...'
               : _resolveContractorPhone(contractor));
     final canCall = phone != 'Loading...' && phone != 'Unavailable';
+
+    final jobTitle = _resolveJobTitle(
+      jobDescription: job.jobDescription,
+      jobCategory: job.jobCategory,
+    );
+    final contractorSubtitle = job.contractorName.trim().isNotEmpty
+        ? job.contractorName.trim()
+        : 'Contractor';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1559,66 +1567,70 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    'Job #$index',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        jobTitle,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.text,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        contractorSubtitle,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.text2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
                 JobStatusChip(status: status),
               ],
             ),
+            const SizedBox(height: 10),
+            _buildJobDetailsButton(
+              jobDescription: job.jobDescription,
+              processDescription: job.processDescription,
+              jobTitle: jobTitle,
+              contractorName: contractorSubtitle,
+              status: status,
+            ),
+            const SizedBox(height: 12),
+            _buildScheduleHighlight(
+              startTime: _formatAssignedJobStartTime(job),
+              durationText: '${_formatDurationHours(job.duration)}h',
+            ),
+            const SizedBox(height: 8),
+            _buildPaymentHighlight(job.jobPaymentAmount),
             const SizedBox(height: 12),
             // Job images (tap to cycle through available images)
-            JobImagesWidget(jobId: job.jobId, height: 160),
+            JobImagesWidget(
+              jobId: job.jobId,
+              height: 160,
+              contractorId: job.contractorId,
+            ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.greenPale,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${AppConstants.currencySymbol} ${job.jobPaymentAmount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.green,
-                  ),
-                ),
-              ),
+            const SizedBox(height: 8),
+            // Secondary info: Contractor & Phone
+            _buildContractorContactSection(
+              contractorName: job.contractorName,
+              phone: phone,
+              canCall: canCall,
+              isContractorLoading: isContractorLoading,
             ),
-            const SizedBox(height: 12),
-            _buildDetailRow(
-              Icons.business,
-              'Contractor',
-              job.contractorName.isEmpty ? 'N/A' : job.contractorName,
-            ),
-            _buildDetailRow(
-              Icons.phone,
-              'Phone',
-              phone,
-              onTap: canCall ? () => _makePhoneCall(phone) : null,
-            ),
-            _buildDetailRow(
-              Icons.schedule,
-              'Start',
-              _formatAssignedJobStartTime(job),
-            ),
-            _buildDetailRow(Icons.timer, 'Duration', '${job.duration}h'),
-            _buildAddressRow(
-              Icons.location_on,
-              'Location',
-              job.latitude,
-              job.longitude,
+            const SizedBox(height: 8),
+            // Open Route + Location Details (Exclamation/Info)
+            _buildRouteAndLocationActions(
+              latitude: job.latitude,
+              longitude: job.longitude,
             ),
             const SizedBox(height: 10),
             _buildPendingJobActionButtons(job: job, status: status),
@@ -1668,7 +1680,153 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
-  Widget _buildSuggestedJobCard(WorkerJobSuggestion suggestion, int index) {
+  Widget _buildJobDetailsButton({
+    required String jobDescription,
+    required String processDescription,
+    required String jobTitle,
+    required String contractorName,
+    required String status,
+  }) {
+    if (jobDescription.trim().isEmpty && processDescription.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: () => _showJobDetailsSheet(
+          jobDescription: jobDescription,
+          processDescription: processDescription,
+          jobTitle: jobTitle,
+          contractorName: contractorName,
+          status: status,
+        ),
+        icon: const Icon(Icons.notes_outlined, size: 17),
+        label: const Text('View job details'),
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.blue,
+          padding: EdgeInsets.zero,
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showJobDetailsSheet({
+    required String jobDescription,
+    required String processDescription,
+    required String jobTitle,
+    required String contractorName,
+    required String status,
+  }) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.work_outline, color: AppColors.blue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      jobTitle,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text,
+                      ),
+                    ),
+                  ),
+                  Chip(
+                    label: Text(status),
+                    visualDensity: VisualDensity.compact,
+                    labelStyle: const TextStyle(fontSize: 11),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                contractorName,
+                style: const TextStyle(fontSize: 13, color: AppColors.text2),
+              ),
+              const SizedBox(height: 20),
+              if (processDescription.trim().isNotEmpty)
+                _buildDescriptionSection(
+                  title: 'Process description',
+                  icon: Icons.account_tree_outlined,
+                  description: processDescription,
+                ),
+              if (processDescription.trim().isNotEmpty &&
+                  jobDescription.trim().isNotEmpty)
+                const SizedBox(height: 14),
+              if (jobDescription.trim().isNotEmpty)
+                _buildDescriptionSection(
+                  title: 'Job description',
+                  icon: Icons.assignment_outlined,
+                  description: jobDescription,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDescriptionSection({
+    required String title,
+    required IconData icon,
+    required String description,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.gray0,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.gray2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: AppColors.blue),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.text,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            description.trim(),
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: AppColors.text2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestedJobCard(WorkerJobSuggestion suggestion) {
     final job = suggestion.jobInformation;
     final workerInfo = suggestion.workerInformation;
     final status = _resolveSuggestionStatus(suggestion);
@@ -1683,6 +1841,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       job.contractorId,
     );
 
+    final phone = _resolveContractorPhone(contractor);
+    final canCall = phone != 'Loading...' && phone != 'Unavailable';
+
     final workerPoint = LatLng(
       workerInfo.workerLatitude,
       workerInfo.workerLongitude,
@@ -1693,6 +1854,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       workerPoint,
       jobPoint,
     );
+
+    final jobTitle = _resolveJobTitle(
+      jobDescription: job.jobDescription,
+      jobCategory: job.jobCategory,
+    );
+    final contractorSubtitle = job.contractorCompany.trim().isNotEmpty
+        ? job.contractorCompany.trim()
+        : 'Contractor';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1720,23 +1889,23 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        job.jobCategory.isEmpty
-                            ? 'Job #$index'
-                            : job.jobCategory,
+                        jobTitle,
                         style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                           color: AppColors.text,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        job.contractorCompany.isEmpty
-                            ? 'Unknown'
-                            : job.contractorCompany,
+                        contractorSubtitle,
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.text2,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -1744,60 +1913,43 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                 JobStatusChip(status: status),
               ],
             ),
+            const SizedBox(height: 10),
+            _buildJobDetailsButton(
+              jobDescription: job.jobDescription,
+              processDescription: job.processDescription,
+              jobTitle: jobTitle,
+              contractorName: contractorSubtitle,
+              status: status,
+            ),
             const SizedBox(height: 12),
-            JobImagesWidget(jobId: job.jobId, height: 160),
+            _buildScheduleHighlight(
+              startTime: _formatSuggestedJobStartTime(job),
+              durationText: '${job.jobDurationHours}h',
+              distanceText: '${distanceKm.toStringAsFixed(1)} km',
+            ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.greenPale,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${AppConstants.currencySymbol} ${job.jobPaymentAmount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.green,
-                  ),
-                ),
-              ),
-            ),
+            _buildPaymentHighlight(job.jobPaymentAmount),
             const SizedBox(height: 12),
-            _buildDetailRow(
-              Icons.schedule,
-              'Start',
-              _formatSuggestedJobStartTime(job),
+            JobImagesWidget(
+              jobId: job.jobId,
+              height: 160,
+              contractorId: job.contractorId,
             ),
-            _buildDetailRow(
-              Icons.timer,
-              'Duration',
-              '${job.jobDurationHours}h',
+            const SizedBox(height: 8),
+            // Secondary info: Contractor & Phone
+            _buildContractorContactSection(
+              contractorName: job.contractorCompany,
+              phone: isContractorLoading ? 'Loading...' : phone,
+              canCall: canCall,
+              isContractorLoading: isContractorLoading,
             ),
-            _buildDetailRow(
-              Icons.alt_route,
-              'Distance',
-              '${distanceKm.toStringAsFixed(1)} km',
-            ),
-            _buildAddressRow(
-              Icons.location_on,
-              'Location',
-              job.jobLatitude,
-              job.jobLongitude,
+            const SizedBox(height: 8),
+            // Open Route + Location Details (Exclamation/Info)
+            _buildRouteAndLocationActions(
+              latitude: job.jobLatitude,
+              longitude: job.jobLongitude,
             ),
             if (showContractorAndDirection) ...[
-              _buildDetailRow(
-                Icons.phone,
-                'Phone',
-                isContractorLoading
-                    ? 'Loading...'
-                    : _resolveContractorPhone(contractor),
-              ),
               const SizedBox(height: 10),
               SizedBox(
                 height: 150,
@@ -1873,6 +2025,486 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
+  Widget _buildPaymentHighlight(double amount) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.greenPale,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '${AppConstants.currencySymbol} ${amount.toStringAsFixed(2)}',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: AppColors.green,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleHighlight({
+    required String startTime,
+    required String durationText,
+    String? distanceText,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.gray0,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.gray2),
+      ),
+      child: Row(
+        children: [
+          // Start time
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.bluePale,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.event_outlined,
+                    color: AppColors.blue,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'START TIME',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.text3,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        startTime,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.text,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            height: 28,
+            width: 1,
+            color: AppColors.gray3,
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+          ),
+          // Duration
+          Expanded(
+            flex: 2,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.greenPale,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.timer_outlined,
+                    color: AppColors.green,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'DURATION',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.text3,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        durationText,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.green,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (distanceText != null) ...[
+            Container(
+              height: 28,
+              width: 1,
+              color: AppColors.gray3,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            // Distance
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.orangePale,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.alt_route_outlined,
+                      color: AppColors.orange,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'DISTANCE',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.text3,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          distanceText,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.orange,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContractorContactSection({
+    required String contractorName,
+    required String phone,
+    required bool canCall,
+    required bool isContractorLoading,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.gray2),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.business_outlined, size: 18, color: AppColors.text2),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              contractorName.isEmpty ? 'Contractor' : contractorName,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (canCall)
+            InkWell(
+              onTap: () => _makePhoneCall(phone),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.bluePale,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.phone, size: 14, color: AppColors.blue),
+                    const SizedBox(width: 4),
+                    Text(
+                      phone,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.blue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (isContractorLoading)
+            const Text(
+              'Loading contact...',
+              style: TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: AppColors.text3,
+              ),
+            )
+          else if (phone != 'Unavailable')
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.phone_outlined,
+                  size: 14,
+                  color: AppColors.text3,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  phone,
+                  style: const TextStyle(fontSize: 12, color: AppColors.text3),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRouteAndLocationActions({
+    required double latitude,
+    required double longitude,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _openGoogleMapsRoute(latitude, longitude),
+            icon: const Icon(Icons.navigation_outlined, size: 16),
+            label: const Text(
+              'Open Route',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.blue,
+              side: const BorderSide(color: AppColors.blue, width: 1.2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.outlined(
+          tooltip: 'Location Info',
+          icon: const Icon(
+            Icons.info_outline,
+            size: 20,
+            color: AppColors.orange,
+          ),
+          style: IconButton.styleFrom(
+            side: const BorderSide(color: AppColors.orange, width: 1.2),
+            backgroundColor: AppColors.orangePale,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            padding: const EdgeInsets.all(10),
+          ),
+          onPressed: () => _showLocationDetailsModal(latitude, longitude),
+        ),
+      ],
+    );
+  }
+
+  void _showLocationDetailsModal(double latitude, double longitude) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: AppColors.orangePale,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.location_on,
+                        color: AppColors.orange,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Job Location Details',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.text,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'ADDRESS',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.text3,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.gray0,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.gray2),
+                  ),
+                  child: FutureBuilder<String>(
+                    future: ApiService().reverseGeocode(latitude, longitude),
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const Row(
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Resolving address...',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.text2,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                      return Text(
+                        snap.data ?? 'Address unavailable',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.text,
+                          height: 1.4,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.pin_drop_outlined,
+                      size: 16,
+                      color: AppColors.text3,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Coordinates: ${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.text2,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _openGoogleMapsRoute(latitude, longitude);
+                    },
+                    icon: const Icon(Icons.navigation, size: 18),
+                    label: const Text('Open Route in Maps'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.blue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _makePhoneCall(String phoneNumber) async {
     final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
     if (cleanPhone.isEmpty) return;
@@ -1887,87 +2519,44 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     }
   }
 
-  Widget _buildDetailRow(
-    IconData icon,
-    String label,
-    String value, {
-    VoidCallback? onTap,
-    Color? valueColor,
-    FontWeight? valueFontWeight,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: onTap != null
-                  ? AppColors.blue
-                  : (valueColor ?? AppColors.gray5),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '$label: ',
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.text2,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Expanded(
-              child: Text(
-                value,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: onTap != null
-                      ? AppColors.blue
-                      : (valueColor ?? AppColors.text),
-                  fontWeight: valueFontWeight,
-                  decoration: onTap != null ? TextDecoration.underline : null,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Future<void> _openGoogleMapsRoute(double latitude, double longitude) async {
+    if (!latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This job has an invalid location.')),
+      );
+      return;
+    }
 
-  Widget _buildAddressRow(IconData icon, String label, double lat, double lng) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: AppColors.gray5),
-          const SizedBox(width: 8),
-          Text(
-            '$label: ',
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.text2,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Expanded(
-            child: FutureBuilder<String>(
-              future: ApiService().reverseGeocode(lat, lng),
-              builder: (context, snap) {
-                return Text(
-                  snap.data ?? 'Loading...',
-                  style: const TextStyle(fontSize: 13, color: AppColors.text),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+    final routeUri = Uri.https('www.google.com', '/maps/dir/', {
+      'api': '1',
+      'destination': '$latitude,$longitude',
+      'travelmode': 'driving',
+    });
+
+    try {
+      final launched = await launchUrl(
+        routeUri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Google Maps.')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the route.')),
+      );
+      debugPrint('Could not open Google Maps route: $e');
+    }
   }
 
   Widget _buildDirectionMap(LatLng workerPoint, LatLng jobPoint) {
@@ -1981,7 +2570,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       children: [
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.recodextech.fixflow_app',
+          userAgentPackageName: 'com.noventispvt.fixflow',
         ),
         PolylineLayer(
           polylines: [
@@ -2133,6 +2722,19 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     return phone;
   }
 
+  String _resolveJobTitle({
+    required String jobDescription,
+    required String jobCategory,
+  }) {
+    final description = jobDescription.trim();
+    if (description.isNotEmpty) return description;
+
+    final category = jobCategory.trim();
+    if (category.isNotEmpty) return category;
+
+    return 'Job';
+  }
+
   String _formatSuggestedJobStartTime(SuggestedJobInformation job) {
     if (job.jobStartTime != null) {
       return _dateTimeFormat.format(job.jobStartTime!);
@@ -2155,6 +2757,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     }
 
     return 'N/A';
+  }
+
+  String _formatDurationHours(double duration) {
+    return duration == duration.truncateToDouble()
+        ? duration.toInt().toString()
+        : duration.toString();
   }
 
   String _workerInitial(String workerName) {

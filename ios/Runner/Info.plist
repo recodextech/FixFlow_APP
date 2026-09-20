@@ -97,10 +97,10 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.recodextech.fixflow</string>
+				<string>com.noventispvt.fixflow</string>
 			</array>
 			<key>CFBundleURLName</key>
-			<string>com.recodextech.fixflow</string>
+			<string>com.noventispvt.fixflow</string>
 		</dict>
 	</array>
 </dict>

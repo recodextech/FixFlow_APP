@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'theme.dart';
@@ -15,9 +14,18 @@ import 'services/notification_service.dart';
 
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
+// Push notifications require Firebase project setup (APNs certs on iOS,
+// google-services.json on Android) tied to a paid developer account. Until
+// that's set up, Firebase is skipped on both platforms; pass
+// --dart-define=ENABLE_FIREBASE=true to re-enable.
+const bool kEnableFirebase = bool.fromEnvironment(
+  'ENABLE_FIREBASE',
+  defaultValue: false,
+);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (defaultTargetPlatform == TargetPlatform.iOS) {
+  if (kEnableFirebase) {
     await Firebase.initializeApp();
     await NotificationService.initialize(scaffoldMessengerKey);
   }

@@ -3,11 +3,14 @@ class WorkerAssignedJob {
   final String assignedJobStatus;
   final String jobId;
   final String jobStatus;
+  final String jobCategory;
+  final String jobDescription;
+  final String processDescription;
   final double latitude;
   final double longitude;
   final String rawJobStartTime;
   final DateTime? jobStartTime;
-  final int duration;
+  final double duration;
   final String contractorId;
   final String contractorName;
   final String contractorPhoneNumber;
@@ -18,6 +21,9 @@ class WorkerAssignedJob {
     required this.assignedJobStatus,
     required this.jobId,
     required this.jobStatus,
+    this.jobCategory = '',
+    this.jobDescription = '',
+    this.processDescription = '',
     required this.latitude,
     required this.longitude,
     required this.rawJobStartTime,
@@ -40,11 +46,21 @@ class WorkerAssignedJob {
       assignedJobStatus: (json['assignedJobStatus'] ?? '').toString(),
       jobId: (json['jobId'] ?? '').toString(),
       jobStatus: (json['jobStatus'] ?? '').toString(),
+      jobCategory:
+          (json['jobCategory'] ??
+                  json['category'] ??
+                  json['jobName'] ??
+                  json['title'] ??
+                  '')
+              .toString(),
+      jobDescription: (json['jobDescription'] ?? json['description'] ?? '')
+          .toString(),
+      processDescription: (json['processDescription'] ?? '').toString(),
       latitude: _workerAssignedToDouble(json['latitude']),
       longitude: _workerAssignedToDouble(json['longitude']),
       rawJobStartTime: rawStartTime,
       jobStartTime: DateTime.tryParse(normalizedStartTime),
-      duration: _workerAssignedToInt(json['duration']),
+      duration: _workerAssignedToDouble(json['duration']),
       contractorId: (json['contractorId'] ?? '').toString(),
       contractorName: (json['contractorName'] ?? '').toString(),
       contractorPhoneNumber: (json['contractorPhoneNumber'] ?? '').toString(),
@@ -59,12 +75,4 @@ double _workerAssignedToDouble(dynamic value) {
   }
 
   return double.tryParse(value.toString()) ?? 0.0;
-}
-
-int _workerAssignedToInt(dynamic value) {
-  if (value is num) {
-    return value.toInt();
-  }
-
-  return int.tryParse(value.toString()) ?? 0;
 }

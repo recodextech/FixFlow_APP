@@ -20,7 +20,7 @@ class AuthService {
   static const String _issuer =
       'https://$_host/keycloak/realms/noventis-gateway';
   static const String _clientId = 'mobile-app';
-  static const String _redirectUri = 'com.recodextech.fixflow://callback';
+  static const String _redirectUri = 'com.noventispvt.fixflow://callback';
   static const List<String> _scopes = [
     'openid',
     'email',

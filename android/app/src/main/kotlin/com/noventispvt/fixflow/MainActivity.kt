@@ -1,4 +1,4 @@
-package com.recodextech.fixflow_app
+package com.noventispvt.fixflow
 
 import io.flutter.embedding.android.FlutterActivity
 
