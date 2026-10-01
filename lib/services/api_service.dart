@@ -215,6 +215,34 @@ class ApiService {
     }
   }
 
+  /// Register the current installation's push token for an active account.
+  Future<void> registerDeviceToken({
+    required String accountId,
+    required String token,
+    required String platform,
+    required String deviceId,
+    required String appVersion,
+  }) async {
+    final response = await _sendWithAuthRetry(
+      method: 'POST',
+      uri: Uri.parse('$_gatewayUrl$_managementPath/device-tokens'),
+      accountId: accountId,
+      body: jsonEncode({
+        'token': token,
+        'platform': platform,
+        'device_id': deviceId,
+        'app_version': appVersion,
+      }),
+    );
+
+    if (response.statusCode != 204) {
+      throw _buildApiException(
+        fallbackMessage: 'Failed to register device token',
+        response: response,
+      );
+    }
+  }
+
   /// Get all categories
   Future<List<Category>> getCategories({String? accountId}) async {
     try {

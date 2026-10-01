@@ -5,6 +5,7 @@ import '../models/worker.dart';
 import '../models/user_accounts.dart';
 import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
 import 'home_screen.dart';
@@ -312,6 +313,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       } else if (latestAccounts.contractor != null) {
         await prefs.activateContractorProfile();
       }
+      await NotificationService.registerDeviceForActiveAccount();
 
       if (!mounted) return;
 

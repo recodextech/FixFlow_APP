@@ -357,7 +357,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
     try {
       final job = Job(
-        description: '',
+        description: _processDescriptionController.text.trim(),
         startTime: _startTimeController.text.trim(),
         duration: int.parse(_durationController.text.trim()),
         latitude: _selectedLocation.latitude,

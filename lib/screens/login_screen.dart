@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../services/preferences_service.dart';
 import 'create_user_screen.dart';
 import 'home_screen.dart';
@@ -16,7 +17,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
-  Future<void> _signInWithGoogle(BuildContext context) async {
+  Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
     try {
       final success = await AuthService().signInWithGoogle();
@@ -31,6 +32,7 @@ class _LoginScreenState extends State<LoginScreen> {
             worker: accounts.worker,
             contractor: accounts.contractor,
           );
+          await NotificationService.registerDeviceForActiveAccount();
 
           if (!mounted) return;
           final nextScreen = accounts.hasAnyProfile
@@ -45,6 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
           if (!mounted) return;
           await AuthService().logout();
           await PreferencesService().clearAll();
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to load account. Please try again.'),
@@ -160,9 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () => _signInWithGoogle(context),
+                      onPressed: _isLoading ? null : _signInWithGoogle,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: const Color(0xFF3C4043),

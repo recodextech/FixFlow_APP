@@ -165,7 +165,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         const SnackBar(content: Text('Availability window deleted')),
       );
 
-      _loadAvailabilities();
+      await _loadAvailabilities();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

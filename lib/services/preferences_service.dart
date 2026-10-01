@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/worker.dart';
 import '../models/contractor.dart';
@@ -24,6 +26,7 @@ class PreferencesService {
   static const String _selectedTypeKey = 'selected_type';
   static const String _workerPhotoKey = 'worker_photo_base64';
   static const String _contractorPhotoKey = 'contractor_photo_base64';
+  static const String _deviceIdKey = 'device_id';
 
   /// Load user accounts data from API response into memory.
   void loadUserAccounts({
@@ -47,7 +50,8 @@ class PreferencesService {
 
     if (contractor != null) {
       _contractor = contractor;
-      if (contractor.photoBase64 != null && contractor.photoBase64!.isNotEmpty) {
+      if (contractor.photoBase64 != null &&
+          contractor.photoBase64!.isNotEmpty) {
         _prefs.setString(_contractorPhotoKey, contractor.photoBase64!);
       } else {
         _prefs.remove(_contractorPhotoKey);
@@ -100,6 +104,21 @@ class PreferencesService {
   }
 
   String? getUserId() => _userId;
+
+  Future<String> getOrCreateDeviceId() async {
+    final existingId = _prefs.getString(_deviceIdKey);
+    if (existingId != null && existingId.isNotEmpty) {
+      return existingId;
+    }
+
+    final random = Random.secure();
+    final deviceId = List.generate(
+      32,
+      (_) => random.nextInt(16).toRadixString(16),
+    ).join();
+    await _prefs.setString(_deviceIdKey, deviceId);
+    return deviceId;
+  }
 
   String? getAccountId() {
     final selectedType = getSelectedType();

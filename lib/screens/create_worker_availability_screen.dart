@@ -511,19 +511,9 @@ class _CreateWorkerAvailabilityScreenState
               },
             ),
             const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Time Windows',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _addTimeWindow,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add'),
-                ),
-              ],
+            const Text(
+              'Time Windows',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             ..._timeWindows.asMap().entries.map((entry) {
@@ -618,6 +608,15 @@ class _CreateWorkerAvailabilityScreenState
               );
             }),
             const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: _addTimeWindow,
+                icon: const Icon(Icons.add),
+                label: const Text('Add time window'),
+              ),
+            ),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -635,6 +634,8 @@ class _CreateWorkerAvailabilityScreenState
                             : 'Complete required fields',
                       ),
                 style: ElevatedButton.styleFrom(
+                  backgroundColor: _canCreateAvailability ? Colors.green : null,
+                  foregroundColor: _canCreateAvailability ? Colors.white : null,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),

@@ -14,21 +14,10 @@ import 'services/notification_service.dart';
 
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
-// Push notifications require Firebase project setup (APNs certs on iOS,
-// google-services.json on Android) tied to a paid developer account. Until
-// that's set up, Firebase is skipped on both platforms; pass
-// --dart-define=ENABLE_FIREBASE=true to re-enable.
-const bool kEnableFirebase = bool.fromEnvironment(
-  'ENABLE_FIREBASE',
-  defaultValue: false,
-);
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (kEnableFirebase) {
-    await Firebase.initializeApp();
-    await NotificationService.initialize(scaffoldMessengerKey);
-  }
+  await Firebase.initializeApp();
+  await NotificationService.initialize(scaffoldMessengerKey);
   await PreferencesService().init();
   runApp(const MyApp());
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -79,6 +68,7 @@ class _AuthGate extends StatelessWidget {
       );
 
       if (accounts.hasAnyProfile) {
+        await NotificationService.registerDeviceForActiveAccount();
         return _StartupDestination.home;
       }
       return _StartupDestination.createUser;

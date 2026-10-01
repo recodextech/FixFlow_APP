@@ -5,6 +5,7 @@ import '../theme.dart';
 import '../services/preferences_service.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../utils/performance_utils.dart';
 import 'worker_profile_screen.dart';
 import 'contractor_profile_screen.dart';
@@ -72,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     await prefs.activateWorkerProfile();
+    await NotificationService.registerDeviceForActiveAccount();
     if (!mounted) return;
 
     await Navigator.push(
@@ -94,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     await prefs.activateContractorProfile();
+    await NotificationService.registerDeviceForActiveAccount();
     if (!mounted) return;
 
     await Navigator.push(
