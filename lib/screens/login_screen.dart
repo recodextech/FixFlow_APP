@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
@@ -15,7 +16,106 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const String _agreementAcceptanceKey =
+      'fixflow_user_agreement_accepted_v1';
+
   bool _isLoading = false;
+  bool _hasAcceptedAgreement = false;
+  bool _agreementPreferenceLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAgreementAcceptance();
+  }
+
+  Future<void> _loadAgreementAcceptance() async {
+    var accepted = false;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      accepted = preferences.getBool(_agreementAcceptanceKey) ?? false;
+    } catch (_) {
+      // Keep the consent unchecked if local storage cannot be read.
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _hasAcceptedAgreement = accepted;
+      _agreementPreferenceLoaded = true;
+    });
+  }
+
+  Future<void> _setAgreementAcceptance(bool? accepted) async {
+    if (accepted == null) return;
+
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setBool(_agreementAcceptanceKey, accepted);
+      if (!mounted) return;
+      setState(() => _hasAcceptedAgreement = accepted);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save your agreement confirmation.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showAgreementDetails() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('FixFlow User Agreement'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('FixFlow is a connection platform'),
+                Text(
+                  'FixFlow only provides this app to help workers and contractors find and connect with each other. FixFlow is not a party to their work agreement and is not an employer, supervisor, or guarantor of either party.',
+                ),
+                SizedBox(height: 12),
+                Text('Keep FixFlow connections in the app'),
+                Text(
+                  'Introductions, job requests, offers, acceptances, agreed terms, and changes arising from a FixFlow connection must be made or recorded in this app. Use emergency services or other necessary channels when a situation requires it.',
+                ),
+                SizedBox(height: 12),
+                Text('Contractor responsibility at the worksite'),
+                Text(
+                  'When a worker arrives at the contractor’s worksite or starts work for the contractor, whichever happens first, the contractor is responsible for the worker and the work. This includes supervision, instructions, workplace safety, access, tools and equipment, agreed payment, and compliance with applicable laws, insurance, and permits, to the extent required by law.',
+                ),
+                SizedBox(height: 12),
+                Text('Worker and contractor obligations'),
+                Text(
+                  'Workers and contractors must provide accurate information, agree directly on the scope, schedule, rate, and payment terms before work begins, act lawfully and respectfully, and raise safety concerns promptly. Each party is responsible for its own promises and conduct.',
+                ),
+                SizedBox(height: 12),
+                Text('No guarantee or supervision by FixFlow'),
+                Text(
+                  'Unless the app expressly says otherwise, FixFlow does not guarantee a user’s identity, qualifications, availability, work quality, payment, or the outcome of a job, and does not inspect or supervise work. Workers and contractors must assess each other and resolve work-related issues directly.',
+                ),
+                SizedBox(height: 12),
+                Text('Safety and disputes'),
+                Text(
+                  'Contractors must provide a safe work environment and take appropriate action if a worker may be at risk. Workers should stop unsafe work and seek appropriate help. The worker and contractor are responsible for resolving disputes between them; FixFlow is not responsible for their work relationship except where applicable law says otherwise.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
@@ -157,13 +257,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 56),
                   // Google Sign-in Button with enhanced styling
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _signInWithGoogle,
+                      key: const ValueKey('google-sign-in-button'),
+                      onPressed:
+                          _isLoading ||
+                              !_agreementPreferenceLoaded ||
+                              !_hasAcceptedAgreement
+                          ? null
+                          : _signInWithGoogle,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: const Color(0xFF3C4043),
@@ -208,18 +313,41 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                     ),
                   ),
-                  const SizedBox(height: 48),
-                  // Terms text with better styling
-                  Text(
-                    'By continuing, you agree to our\nTerms & Privacy Policy',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.56),
-                      height: 1.5,
-                      fontWeight: FontWeight.w400,
+                  if (_agreementPreferenceLoaded && !_hasAcceptedAgreement) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Checkbox(
+                          value: _hasAcceptedAgreement,
+                          activeColor: Colors.white,
+                          checkColor: const Color(0xFF267A68),
+                          side: const BorderSide(color: Colors.white70),
+                          onChanged: _isLoading
+                              ? null
+                              : _setAgreementAcceptance,
+                        ),
+                        Flexible(
+                          child: Text(
+                            'I agree to the FixFlow User Agreement',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withValues(alpha: 0.88),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                    TextButton(
+                      onPressed: _showAgreementDetails,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text('View more'),
+                    ),
+                  ],
                   const SizedBox(height: 40),
                 ],
               ),
