@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../models/worker.dart';
 import '../models/user_accounts.dart';
+import '../providers/language_provider.dart';
 import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
@@ -36,14 +38,14 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     'MAINTENANCE',
   ];
 
-  String _parentTypeLabel(String parentType) {
+  String _parentTypeLabel(String parentType, AppLocalizations loc) {
     switch (parentType) {
       case 'HOUSE_REPAIR':
-        return 'House Repair';
+        return loc.houseRepair;
       case 'GARDEN_WORKS':
-        return 'Garden Works';
+        return loc.gardenWorks;
       case 'MAINTENANCE':
-        return 'Maintenance';
+        return loc.maintenance;
       default:
         return parentType
             .replaceAll('_', ' ')
@@ -112,13 +114,11 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
         .toList();
   }
 
-  void _showCategoryDescription(Category category) {
+  void _showCategoryDescription(Category category, AppLocalizations loc) {
     final description = category.description.trim();
     if (description.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No description available for this category.'),
-        ),
+        SnackBar(content: Text(loc.noDescriptionAvailableForThisCategory)),
       );
       return;
     }
@@ -138,16 +138,16 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     );
   }
 
-  Widget _buildCategoryInfoButton(Category category) {
+  Widget _buildCategoryInfoButton(Category category, AppLocalizations loc) {
     return IconButton(
-      tooltip: 'Category description',
+      tooltip: loc.categoryDescription,
       icon: const Icon(
         Icons.help_outline,
         size: 18,
         color: AppColors.brandGreen,
       ),
       splashRadius: 18,
-      onPressed: () => _showCategoryDescription(category),
+      onPressed: () => _showCategoryDescription(category, loc),
     );
   }
 
@@ -165,7 +165,10 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     });
   }
 
-  Widget _buildParentTypeSelection(List<Category> categories) {
+  Widget _buildParentTypeSelection(
+    List<Category> categories,
+    AppLocalizations loc,
+  ) {
     return Row(
       children: _parentTypeOrder.map((parentType) {
         final count = _subcategoryCount(categories, parentType);
@@ -209,7 +212,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        _parentTypeLabel(parentType),
+                        _parentTypeLabel(parentType, loc),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 11.5,
@@ -227,7 +230,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                         ),
                       ),
                       Text(
-                        'subcategories',
+                        loc.subcategoriesLabel,
                         style: TextStyle(
                           fontSize: 10.5,
                           color: Colors.grey.shade700,
@@ -261,8 +264,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
 
     final selectedCategoryIds = _selectedCategoryIds.toList();
     if (selectedCategoryIds.isEmpty) {
+      final loc = AppLocalizations.of(context.read<LanguageProvider>().locale);
       setState(() {
-        _skillsError = 'Please select at least one skill.';
+        _skillsError = loc.selectAtLeastOneSkill;
       });
       return;
     }
@@ -349,9 +353,13 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       return;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context.read<LanguageProvider>().locale).error}: $e',
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -362,6 +370,15 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<LanguageProvider>(
+      builder: (context, languageProvider, _) {
+        final loc = AppLocalizations.of(languageProvider.locale);
+        return _buildUserCreationUI(loc);
+      },
+    );
+  }
+
+  Widget _buildUserCreationUI(AppLocalizations loc) {
     return Scaffold(
       body: Column(
         children: [
@@ -384,9 +401,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                       child: const Icon(Icons.arrow_back, color: Colors.white),
                     ),
                     const SizedBox(width: 16),
-                    const Text(
-                      'Create User Profile',
-                      style: TextStyle(
+                    Text(
+                      loc.createUserProfile,
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
@@ -405,9 +422,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'User Details',
-                      style: TextStyle(
+                    Text(
+                      loc.userDetailsLabel,
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: AppColors.text,
@@ -416,13 +433,13 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Full Name *',
-                        prefixIcon: Icon(Icons.person_outline),
+                      decoration: InputDecoration(
+                        labelText: loc.fullNameLabel,
+                        prefixIcon: const Icon(Icons.person_outline),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter name';
+                          return loc.pleaseEnterName;
                         }
                         return null;
                       },
@@ -432,9 +449,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                       contentPadding: EdgeInsets.zero,
                       value: _includeEmail,
                       controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text(
-                        'Add email address',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                      title: Text(
+                        loc.addEmailAddress,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       onChanged: (value) {
                         setState(() {
@@ -449,22 +466,22 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                       const SizedBox(height: 14),
                       TextFormField(
                         controller: _emailController,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          hintText: 'example@gmail.com',
-                          prefixIcon: Icon(Icons.email_outlined),
+                        decoration: InputDecoration(
+                          labelText: loc.email,
+                          hintText: loc.exampleEmail,
+                          prefixIcon: const Icon(Icons.email_outlined),
                         ),
                         keyboardType: TextInputType.emailAddress,
                         validator: (value) {
                           final trimmed = value?.trim() ?? '';
                           if (trimmed.isEmpty) {
-                            return 'Please enter email';
+                            return loc.pleaseEnterEmail;
                           }
                           final emailRegex = RegExp(
                             r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$',
                           );
                           if (!emailRegex.hasMatch(trimmed)) {
-                            return 'Please enter a valid email';
+                            return loc.pleaseEnterValidEmail;
                           }
                           return null;
                         },
@@ -473,10 +490,10 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _phoneController,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone Number *',
-                        hintText: '07xxxxxxxx',
-                        prefixIcon: Icon(Icons.phone_outlined),
+                      decoration: InputDecoration(
+                        labelText: '${loc.phone} *',
+                        hintText: loc.examplePhone,
+                        prefixIcon: const Icon(Icons.phone_outlined),
                       ),
                       keyboardType: TextInputType.phone,
                       maxLength: 10,
@@ -484,27 +501,30 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                       validator: (value) {
                         final trimmed = value?.trim() ?? '';
                         if (trimmed.isEmpty) {
-                          return 'Please enter phone number';
+                          return loc.pleaseEnterPhoneNumber;
                         }
                         if (!RegExp(r'^0\d{9}$').hasMatch(trimmed)) {
-                          return 'Enter a valid 10 digit number e.g. 07xxxxxxxx';
+                          return loc.enterValidPhoneNumber;
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 28),
-                    const Text(
-                      'Skills & Expertise *',
-                      style: TextStyle(
+                    Text(
+                      loc.skillsAndExpertise,
+                      style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: AppColors.text,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Select at least one skill to continue',
-                      style: TextStyle(fontSize: 13, color: AppColors.text3),
+                    Text(
+                      loc.selectAtLeastOneSkill,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.text3,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Consumer<WorkerProvider>(
@@ -542,9 +562,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                               color: Colors.grey.shade100,
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: const Text(
-                              'No category types available',
-                              style: TextStyle(
+                            child: Text(
+                              loc.noCategoriesAvailable,
+                              style: const TextStyle(
                                 color: Colors.black54,
                                 fontSize: 13,
                               ),
@@ -575,7 +595,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildParentTypeSelection(allCategories),
+                                _buildParentTypeSelection(allCategories, loc),
                                 const SizedBox(height: 12),
                                 if (_activeParentType == null)
                                   Container(
@@ -590,9 +610,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                                         ),
                                       ),
                                     ),
-                                    child: const Text(
-                                      'Select a category type above to see subcategories.',
-                                      style: TextStyle(
+                                    child: Text(
+                                      loc.selectCategoryTypeAboveToSeeSubcategories,
+                                      style: const TextStyle(
                                         fontSize: 12.5,
                                         color: Colors.black54,
                                         fontWeight: FontWeight.w600,
@@ -605,7 +625,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${_parentTypeLabel(_activeParentType!)} Subcategories',
+                                        '${_parentTypeLabel(_activeParentType!, loc)} ${loc.subcategoriesLabel}',
                                         style: const TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w700,
@@ -647,6 +667,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                                               secondary:
                                                   _buildCategoryInfoButton(
                                                     category,
+                                                    loc,
                                                   ),
                                               onChanged: (_) =>
                                                   _toggleCategorySelection(
@@ -672,7 +693,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                                     ),
                                   ),
                                 Text(
-                                  'Selected Skills (${selectedCategories.length})',
+                                  '${loc.selectedSkills} (${selectedCategories.length})',
                                   style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
@@ -687,9 +708,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                                       color: Colors.grey.shade100,
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    child: const Text(
-                                      'No skills selected yet.',
-                                      style: TextStyle(
+                                    child: Text(
+                                      loc.noSkillsSelected,
+                                      style: const TextStyle(
                                         fontSize: 12.5,
                                         color: Colors.black54,
                                       ),
@@ -723,6 +744,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                                             children: [
                                               _buildCategoryInfoButton(
                                                 category,
+                                                loc,
                                               ),
                                               IconButton(
                                                 icon: const Icon(
@@ -769,9 +791,9 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text(
-                                'Create User',
-                                style: TextStyle(
+                            : Text(
+                                loc.createUser,
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                 ),

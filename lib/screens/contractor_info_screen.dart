@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../models/contractor.dart';
+import '../l10n/app_localizations.dart';
 import '../models/wallet.dart';
 import '../providers/contractor_provider.dart';
+import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
@@ -69,6 +71,10 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     );
   }
 
+  AppLocalizations get _loc => AppLocalizations.of(
+    Provider.of<LanguageProvider>(context, listen: false).locale,
+  );
+
   Future<Contractor?> _loadContractor() {
     return context.read<ContractorProvider>().getContractor(
       widget.contractorId,
@@ -93,6 +99,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
   Future<void> _showPhotoSourceSheet() async {
     if (!mounted) return;
 
+    final loc = _loc;
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -104,12 +111,12 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take photo'),
+                title: Text(loc.takePhoto),
                 onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Choose from gallery'),
+                title: Text(loc.chooseFromGallery),
                 onTap: () => Navigator.pop(context, ImageSource.gallery),
               ),
             ],
@@ -127,16 +134,16 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Update Profile Photo'),
-        content: const Text('Do you want to update your profile photo?'),
+        title: Text(loc.updateProfilePhoto),
+        content: Text(loc.doYouWantToUpdateYourProfilePhoto),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(loc.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Update'),
+            child: Text(loc.update),
           ),
         ],
       ),
@@ -170,9 +177,9 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile photo updated'),
-          duration: Duration(seconds: 1),
+        SnackBar(
+          content: Text(_loc.profilePhotoUpdated),
+          duration: const Duration(seconds: 1),
         ),
       );
     } catch (e) {
@@ -212,7 +219,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
           actions: [
             TextButton(
               onPressed: messenger.hideCurrentMaterialBanner,
-              child: const Text('Dismiss'),
+              child: Text(_loc.close),
             ),
           ],
         ),
@@ -252,9 +259,9 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile updated'),
-          duration: Duration(seconds: 1),
+        SnackBar(
+          content: Text(_loc.profileUpdated),
+          duration: const Duration(seconds: 1),
         ),
       );
     } catch (e) {
@@ -265,6 +272,15 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<LanguageProvider>(
+      builder: (context, languageProvider, _) {
+        final loc = AppLocalizations.of(languageProvider.locale);
+        return _buildContractorInfoUI(context, loc);
+      },
+    );
+  }
+
+  Widget _buildContractorInfoUI(BuildContext context, AppLocalizations loc) {
     return Scaffold(
       body: FutureBuilder<Contractor?>(
         future: _contractorFuture,
@@ -281,7 +297,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                   Icon(Icons.error_outline, size: 48, color: AppColors.red),
                   const SizedBox(height: 12),
                   Text(
-                    'Error: ${snapshot.error}',
+                    '${loc.error}: ${snapshot.error}',
                     style: const TextStyle(color: AppColors.text2),
                   ),
                   const SizedBox(height: 12),
@@ -292,7 +308,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                         _contractorFuture = _loadContractor();
                       });
                     },
-                    child: const Text('Retry'),
+                    child: Text(loc.retry),
                   ),
                 ],
               ),
@@ -311,11 +327,11 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                     color: AppColors.gray5,
                   ),
                   const SizedBox(height: 12),
-                  const Text('Contractor not found'),
+                  Text(loc.contractorProfileNotFound),
                   const SizedBox(height: 12),
                   ElevatedButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Back'),
+                    child: Text(loc.back),
                   ),
                 ],
               ),
@@ -358,9 +374,9 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                 ),
                               ),
                               const Spacer(),
-                              const Text(
-                                'Contractor Information',
-                                style: TextStyle(
+                              Text(
+                                loc.contractorInformation,
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
@@ -499,10 +515,10 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  const Expanded(
+                                  Expanded(
                                     child: Text(
-                                      'Personal Information',
-                                      style: TextStyle(
+                                      loc.personalInformation,
+                                      style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700,
                                         color: AppColors.text,
@@ -515,7 +531,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                       Icons.camera_alt_outlined,
                                       size: 18,
                                     ),
-                                    label: const Text('Photo'),
+                                    label: Text(loc.photo),
                                     style: TextButton.styleFrom(
                                       foregroundColor: AppColors.blue,
                                       padding: const EdgeInsets.symmetric(
@@ -531,8 +547,8 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                 onChanged: (_) =>
                                     _saveDebouncer(_autoSaveContractor),
                                 decoration: InputDecoration(
-                                  labelText: 'Business Name',
-                                  hintText: 'Enter contractor name',
+                                  labelText: loc.businessName,
+                                  hintText: loc.hintEnterContractorName,
                                   prefixIcon: const Icon(
                                     Icons.business_outlined,
                                   ),
@@ -556,7 +572,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                 ),
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
-                                    return 'Please enter name';
+                                    return loc.pleaseEnterName;
                                   }
                                   return null;
                                 },
@@ -567,8 +583,8 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                 onChanged: (_) =>
                                     _saveDebouncer(_autoSaveContractor),
                                 decoration: InputDecoration(
-                                  labelText: 'Phone Number',
-                                  hintText: 'Enter phone number',
+                                  labelText: loc.phone,
+                                  hintText: loc.enterPhoneNumber,
                                   prefixIcon: const Icon(Icons.phone_outlined),
                                   filled: true,
                                   fillColor: AppColors.gray1,
@@ -591,7 +607,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                 keyboardType: TextInputType.phone,
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
-                                    return 'Please enter phone number';
+                                    return loc.pleaseEnterPhoneNumber;
                                   }
                                   return null;
                                 },
@@ -633,9 +649,9 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  const Text(
-                                    'Wallets',
-                                    style: TextStyle(
+                                  Text(
+                                    loc.wallets,
+                                    style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w700,
                                       color: AppColors.text,
@@ -644,16 +660,16 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                                 ],
                               ),
                               const SizedBox(height: 6),
-                              const Text(
-                                'Your account wallet balances',
-                                style: TextStyle(
+                              Text(
+                                loc.yourAccountWalletBalances,
+                                style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.text3,
                                   fontWeight: FontWeight.w400,
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              _buildWalletPointsSection(),
+                              _buildWalletPointsSection(loc),
                             ],
                           ),
                         ),
@@ -670,7 +686,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     );
   }
 
-  Widget _buildWalletPointsSection() {
+  Widget _buildWalletPointsSection(AppLocalizations loc) {
     return FutureBuilder<List<Wallet>>(
       future: _walletsFuture,
       builder: (context, snapshot) {
@@ -690,9 +706,9 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
               children: [
                 Icon(Icons.info_outline, size: 16, color: AppColors.text3),
                 const SizedBox(width: 8),
-                const Text(
-                  'No wallets found',
-                  style: TextStyle(fontSize: 13, color: AppColors.text3),
+                Text(
+                  loc.noWalletsFound,
+                  style: const TextStyle(fontSize: 13, color: AppColors.text3),
                 ),
               ],
             ),
@@ -704,7 +720,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
           children: wallets.map((wallet) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _buildWalletTile(wallet),
+              child: _buildWalletTile(wallet, loc),
             );
           }).toList(),
         );
@@ -712,7 +728,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
     );
   }
 
-  Widget _buildWalletTile(Wallet wallet) {
+  Widget _buildWalletTile(Wallet wallet, AppLocalizations loc) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -768,9 +784,9 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
                     color: AppColors.blue,
                   ),
                 ),
-                const Text(
-                  'balance',
-                  style: TextStyle(
+                Text(
+                  loc.balance,
+                  style: const TextStyle(
                     fontSize: 11,
                     color: AppColors.text3,
                     fontWeight: FontWeight.w500,

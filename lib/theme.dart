@@ -71,8 +71,15 @@ class AppConstants {
   static const String currencySymbol = 'Rs.';
 }
 
-ThemeData buildAppTheme() {
+/// Font family bundled for Sinhala text (see pubspec.yaml).
+const String sinhalaFontFamily = 'NotoSansSinhala';
+
+/// Builds the app theme for [locale]. Sinhala uses the bundled Noto Sans
+/// Sinhala font; other languages use the platform default font.
+ThemeData buildAppTheme([Locale locale = const Locale('en')]) {
+  final isSinhala = locale.languageCode == 'si';
   return ThemeData(
+    fontFamily: isSinhala ? sinhalaFontFamily : null,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.blue,
       brightness: Brightness.light,

@@ -2,6 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
+import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
@@ -39,7 +42,7 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
   Uint8List? _selectedPhotoBytes;
   bool _isUploading = false;
 
-  Future<void> _showPhotoSourceSheet() async {
+  Future<void> _showPhotoSourceSheet(AppLocalizations loc) async {
     if (!mounted) return;
 
     final source = await showModalBottomSheet<ImageSource>(
@@ -53,12 +56,12 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take photo'),
+                title: Text(loc.takePhoto),
                 onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Choose from gallery'),
+                title: Text(loc.chooseFromGallery),
                 onTap: () => Navigator.pop(context, ImageSource.gallery),
               ),
             ],
@@ -75,7 +78,7 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
     setState(() => _selectedPhotoBytes = bytes);
   }
 
-  Future<void> _continueToProfile() async {
+  Future<void> _continueToProfile(AppLocalizations loc) async {
     final accountId = widget.accountId ?? PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) {
       _goToHome();
@@ -107,13 +110,13 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Profile photo updated')));
+        ).showSnackBar(SnackBar(content: Text(loc.profilePhotoUpdated)));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${loc.failedToUploadPhoto}: $e')),
+        );
       }
     } finally {
       if (mounted) {
@@ -135,6 +138,15 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<LanguageProvider>(
+      builder: (context, languageProvider, _) {
+        final loc = AppLocalizations.of(languageProvider.locale);
+        return _buildPhotoUploadUI(loc);
+      },
+    );
+  }
+
+  Widget _buildPhotoUploadUI(AppLocalizations loc) {
     final accentColor = AppColors.brandGreen;
     final accentPale = AppColors.brandPale;
 
@@ -160,10 +172,10 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                       child: const Icon(Icons.arrow_back, color: Colors.white),
                     ),
                     const SizedBox(width: 16),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Add Profile Photo',
-                        style: TextStyle(
+                        loc.addProfilePhoto,
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
@@ -182,7 +194,7 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                 children: [
                   const SizedBox(height: 16),
                   Text(
-                    'Your profile is ready. Add a photo now or skip this step and continue to the home page.',
+                    loc.profileReadyAddPhoto,
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, color: AppColors.text2),
                   ),
@@ -208,9 +220,9 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: _showPhotoSourceSheet,
+                      onPressed: () => _showPhotoSourceSheet(loc),
                       icon: const Icon(Icons.photo_camera_outlined),
-                      label: const Text('Choose profile photo'),
+                      label: Text(loc.chooseProfilePhoto),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: accentColor,
                         foregroundColor: Colors.white,
@@ -224,9 +236,11 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _isUploading ? null : _continueToProfile,
+                      onPressed: _isUploading
+                          ? null
+                          : () => _continueToProfile(loc),
                       icon: const Icon(Icons.skip_next_outlined),
-                      label: const Text('Skip for now'),
+                      label: Text(loc.skipForNow),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.brandGreen,
                         side: const BorderSide(color: AppColors.brandGold),
@@ -240,7 +254,9 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isUploading ? null : _continueToProfile,
+                      onPressed: _isUploading
+                          ? null
+                          : () => _continueToProfile(loc),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: accentColor,
                         foregroundColor: Colors.white,
@@ -257,9 +273,9 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text(
-                              'Continue to home',
-                              style: TextStyle(
+                          : Text(
+                              loc.goToHome,
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),

@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/create_user_screen.dart';
 import 'providers/worker_provider.dart';
 import 'providers/contractor_provider.dart';
+import 'providers/language_provider.dart';
 import 'services/preferences_service.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'l10n/app_localizations.dart';
 
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -35,17 +38,31 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => WorkerProvider()),
         ChangeNotifierProvider(create: (_) => ContractorProvider()),
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
       ],
-      child: MaterialApp(
-        title: 'FixFlow',
-        scaffoldMessengerKey: scaffoldMessengerKey,
-        theme: buildAppTheme(),
-        home: const _AuthGate(),
-        routes: {
-          '/home': (_) => const HomeScreen(),
-          '/login': (_) => const LoginScreen(),
+      child: Consumer<LanguageProvider>(
+        builder: (context, languageProvider, _) {
+          return MaterialApp(
+            title: 'FixFlow',
+            scaffoldMessengerKey: scaffoldMessengerKey,
+            theme: buildAppTheme(languageProvider.locale),
+            locale: languageProvider.locale,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizationsDelegate.supportedLocales,
+            localeResolutionCallback:
+                AppLocalizationsDelegate.localeResolutionCallback,
+            home: const _AuthGate(),
+            routes: {
+              '/home': (_) => const HomeScreen(),
+              '/login': (_) => const LoginScreen(),
+            },
+            debugShowCheckedModeBanner: false,
+          );
         },
-        debugShowCheckedModeBanner: false,
       ),
     );
   }

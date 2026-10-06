@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../models/availability.dart';
 import '../models/wallet.dart';
 import '../models/worker.dart';
+import '../providers/language_provider.dart';
 import '../providers/worker_provider.dart';
 import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
@@ -94,6 +96,10 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     super.dispose();
   }
 
+  AppLocalizations get _loc => AppLocalizations.of(
+    Provider.of<LanguageProvider>(context, listen: false).locale,
+  );
+
   Future<Worker?> _loadWorker() {
     return context.read<WorkerProvider>().getWorker(
       widget.workerId,
@@ -159,12 +165,12 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take photo'),
+                title: Text(_loc.takePhoto),
                 onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Choose from gallery'),
+                title: Text(_loc.chooseFromGallery),
                 onTap: () => Navigator.pop(context, ImageSource.gallery),
               ),
             ],
@@ -182,16 +188,16 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Update Profile Photo'),
-        content: const Text('Do you want to update your profile photo?'),
+        title: Text(_loc.updateProfilePhoto),
+        content: Text(_loc.doYouWantToUpdateYourProfilePhoto),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(_loc.cancel),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Update'),
+            child: Text(_loc.update),
           ),
         ],
       ),
@@ -221,7 +227,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       );
 
       if (workerCategories.isEmpty) {
-        _showTopError('Unable to resolve selected skills to category IDs.');
+        _showTopError(_loc.unableToResolveSkills);
         return;
       }
 
@@ -242,8 +248,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile photo updated'),
+        SnackBar(
+          content: Text(_loc.profilePhotoUpdated),
           duration: Duration(seconds: 1),
         ),
       );
@@ -284,7 +290,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
           actions: [
             TextButton(
               onPressed: messenger.hideCurrentMaterialBanner,
-              child: const Text('Dismiss'),
+              child: Text(_loc.close),
             ),
           ],
         ),
@@ -300,7 +306,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Account ID not found')));
+      ).showSnackBar(SnackBar(content: Text(_loc.accountIdMissing)));
       return;
     }
 
@@ -319,7 +325,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       );
 
       if (workerCategories.isEmpty) {
-        _showTopError('Unable to resolve selected skills to category IDs.');
+        _showTopError(_loc.unableToResolveSkills);
         return;
       }
 
@@ -344,16 +350,16 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Worker profile updated successfully')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_loc.profileUpdated)));
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update worker: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${_loc.failedToUpdateWorker}: $e')),
+      );
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -409,8 +415,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile updated'),
+        SnackBar(
+          content: Text(_loc.profileUpdated),
           duration: Duration(seconds: 1),
         ),
       );
@@ -423,11 +429,11 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   String _parentTypeLabel(String parentType) {
     switch (parentType) {
       case 'HOUSE_REPAIR':
-        return 'House Repair';
+        return _loc.houseRepair;
       case 'GARDEN_WORKS':
-        return 'Garden Works';
+        return _loc.gardenWorks;
       case 'MAINTENANCE':
-        return 'Maintenance';
+        return _loc.maintenance;
       default:
         return parentType
             .replaceAll('_', ' ')
@@ -623,9 +629,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     final description = category.description.trim();
     if (description.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No description available for this category.'),
-        ),
+        SnackBar(content: Text(_loc.noDescriptionAvailableForThisCategory)),
       );
       return;
     }
@@ -638,7 +642,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: Text(_loc.ok),
           ),
         ],
       ),
@@ -647,7 +651,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
   Widget _buildCategoryInfoButton(Category category) {
     return IconButton(
-      tooltip: 'Category description',
+      tooltip: _loc.categoryDescription,
       icon: const Icon(
         Icons.help_outline,
         size: 18,
@@ -663,14 +667,14 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     if (accountId == null || accountId.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Account ID not found')));
+      ).showSnackBar(SnackBar(content: Text(_loc.accountIdMissing)));
       return;
     }
 
     if (_selectedCategoryIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one skill.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_loc.selectAtLeastOneSkill)));
       return;
     }
 
@@ -687,21 +691,15 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       final invalidValues = _invalidSelectedCategoryValues(categories);
 
       if (workerCategories.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select valid skills before updating.'),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_loc.pleaseSelectValidSkills)));
         return;
       }
 
       if (invalidValues.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Some selected values are not valid category names. Please reselect skills.',
-            ),
-          ),
+          SnackBar(content: Text(_loc.invalidCategoryNamesReselect)),
         );
         return;
       }
@@ -712,13 +710,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       );
 
       if (workerCategoryIds.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Unable to resolve selected skills to category IDs. Please retry.',
-            ),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_loc.unableToResolveSkills)));
         return;
       }
 
@@ -738,7 +732,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Worker skills updated successfully')),
+        SnackBar(content: Text(_loc.workerSkillsUpdatedSuccessfully)),
       );
       setState(() {
         _showCategoryEditor = false;
@@ -746,9 +740,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update skills: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${_loc.failedToUpdateSkills}: $e')),
+      );
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -805,9 +799,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Skills',
+                      _loc.skills,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -832,13 +826,13 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                       _showCategoryEditor ? Icons.expand_less : Icons.edit,
                       size: 18,
                     ),
-                    label: Text(_showCategoryEditor ? 'Hide' : 'Update'),
+                    label: Text(_showCategoryEditor ? _loc.hide : _loc.update),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Selected skills are shown below. Open the editor to add or remove skills.',
+              Text(
+                _loc.selectedSkillsHint,
                 style: TextStyle(fontSize: 12, color: AppColors.text3),
               ),
               if (invalidSelectedValues.isNotEmpty) ...[
@@ -850,8 +844,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                     color: AppColors.orangePale,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Text(
-                    'Some stored skills are invalid (category names not found). Re-select valid skills and update.',
+                  child: Text(
+                    _loc.invalidStoredSkills,
                     style: TextStyle(fontSize: 12, color: AppColors.text2),
                   ),
                 ),
@@ -865,8 +859,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                     color: AppColors.gray1,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Text(
-                    'No skills selected.',
+                  child: Text(
+                    _loc.noSkillsSelected,
                     style: TextStyle(fontSize: 13, color: AppColors.text2),
                   ),
                 )
@@ -910,8 +904,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Text(
-                      'No skill types available',
+                    child: Text(
+                      _loc.noCategoriesAvailable,
                       style: TextStyle(fontSize: 13, color: Colors.black54),
                     ),
                   )
@@ -999,7 +993,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                           ),
                                         ),
                                         Text(
-                                          'subcategories',
+                                          _loc.subcategoriesLabel,
                                           style: TextStyle(
                                             fontSize: 10.5,
                                             color: Colors.grey.shade700,
@@ -1028,8 +1022,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               ),
                             ),
                           ),
-                          child: const Text(
-                            'Select a skill type above to see subcategories.',
+                          child: Text(
+                            _loc.selectCategoryTypeAboveToSeeSubcategories,
                             style: TextStyle(
                               fontSize: 12.5,
                               color: Colors.black54,
@@ -1042,7 +1036,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${_parentTypeLabel(_activeParentType!)} Subcategories',
+                              '${_parentTypeLabel(_activeParentType!)} ${_loc.subcategoriesLabel}',
                               style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -1120,7 +1114,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                   ),
                                 )
                               : const Icon(Icons.save_outlined),
-                          label: const Text('Update Skills'),
+                          label: Text(_loc.updateSkills),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.green,
                             foregroundColor: Colors.white,
@@ -1143,13 +1137,19 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<LanguageProvider>(
+      builder: (context, _, _) => _buildWorkerDetailsUI(context),
+    );
+  }
+
+  Widget _buildWorkerDetailsUI(BuildContext context) {
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createAvailability,
         backgroundColor: AppColors.green,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
-        label: const Text('Add Availability'),
+        label: Text(_loc.addAvailability),
       ),
       body: FutureBuilder<Worker?>(
         future: _workerFuture,
@@ -1166,13 +1166,13 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                   Icon(Icons.error_outline, size: 48, color: AppColors.red),
                   const SizedBox(height: 16),
                   Text(
-                    'Error: ${snapshot.error}',
+                    '${_loc.error}: ${snapshot.error}',
                     style: const TextStyle(color: AppColors.text2),
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => setState(_loadData),
-                    child: const Text('Retry'),
+                    child: Text(_loc.retry),
                   ),
                 ],
               ),
@@ -1187,11 +1187,11 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                 children: [
                   Icon(Icons.person_outline, size: 48, color: AppColors.gray5),
                   const SizedBox(height: 16),
-                  const Text('Worker profile not found'),
+                  Text(_loc.workerProfileNotFound),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Back'),
+                    child: Text(_loc.back),
                   ),
                 ],
               ),
@@ -1233,8 +1233,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                 ),
                               ),
                               const Spacer(),
-                              const Text(
-                                'Edit Worker Profile',
+                              Text(
+                                _loc.editProfile,
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -1335,8 +1335,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Personal Information',
+                          Text(
+                            _loc.personalInformation,
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -1349,7 +1349,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               Icons.camera_alt_outlined,
                               size: 18,
                             ),
-                            label: const Text('Update photo'),
+                            label: Text(_loc.updateProfilePhoto),
                           ),
                         ],
                       ),
@@ -1362,13 +1362,13 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                             TextFormField(
                               controller: _nameController,
                               onChanged: (_) => _saveDebouncer(_autoSaveWorker),
-                              decoration: const InputDecoration(
-                                labelText: 'Name',
+                              decoration: InputDecoration(
+                                labelText: _loc.name,
                                 prefixIcon: Icon(Icons.person_outline),
                               ),
                               validator: (value) =>
                                   (value == null || value.trim().isEmpty)
-                                  ? 'Please enter a name'
+                                  ? _loc.pleaseEnterName
                                   : null,
                             ),
                             const SizedBox(height: 12),
@@ -1376,13 +1376,13 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               controller: _phoneController,
                               onChanged: (_) => _saveDebouncer(_autoSaveWorker),
                               keyboardType: TextInputType.phone,
-                              decoration: const InputDecoration(
-                                labelText: 'Phone',
+                              decoration: InputDecoration(
+                                labelText: _loc.phone,
                                 prefixIcon: Icon(Icons.phone_outlined),
                               ),
                               validator: (value) =>
                                   (value == null || value.trim().isEmpty)
-                                  ? 'Please enter a phone number'
+                                  ? _loc.pleaseEnterPhoneNumber
                                   : null,
                             ),
                           ],
@@ -1423,8 +1423,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                const Text(
-                                  'Wallets',
+                                Text(
+                                  _loc.wallets,
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
@@ -1434,8 +1434,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               ],
                             ),
                             const SizedBox(height: 6),
-                            const Text(
-                              'Your account wallet balances',
+                            Text(
+                              _loc.yourAccountWalletBalances,
                               style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.text3,
@@ -1451,9 +1451,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                       // Availability Windows
                       Row(
                         children: [
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Availability Windows',
+                              _loc.availabilityWindows,
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -1498,9 +1498,9 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                     color: AppColors.red,
                                   ),
                                   const SizedBox(width: 8),
-                                  const Expanded(
+                                  Expanded(
                                     child: Text(
-                                      'Could not load availabilities',
+                                      _loc.couldNotLoadAvailabilities,
                                       style: TextStyle(
                                         fontSize: 13,
                                         color: AppColors.red,
@@ -1509,7 +1509,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                   ),
                                   TextButton(
                                     onPressed: _refreshAvailabilities,
-                                    child: const Text('Retry'),
+                                    child: Text(_loc.retry),
                                   ),
                                 ],
                               ),
@@ -1539,16 +1539,16 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                     color: AppColors.gray4,
                                   ),
                                   const SizedBox(height: 8),
-                                  const Text(
-                                    'No availability windows',
+                                  Text(
+                                    _loc.noAvailabilitySet,
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: AppColors.text2,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
-                                  const Text(
-                                    'Tap the button below to add one',
+                                  Text(
+                                    _loc.tapButtonBelowToAddOne,
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: AppColors.text3,
@@ -1563,7 +1563,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${response.total} total',
+                                '${response.total} ${_loc.total}',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.text3,
@@ -1614,8 +1614,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
               children: [
                 Icon(Icons.info_outline, size: 16, color: AppColors.text3),
                 const SizedBox(width: 8),
-                const Text(
-                  'No wallets found',
+                Text(
+                  _loc.noWalletsFound,
                   style: TextStyle(fontSize: 13, color: AppColors.text3),
                 ),
               ],
@@ -1693,8 +1693,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                     color: AppColors.green,
                   ),
                 ),
-                const Text(
-                  'balance',
+                Text(
+                  _loc.balance,
                   style: TextStyle(
                     fontSize: 11,
                     color: AppColors.text3,
@@ -1769,7 +1769,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Availability $index',
+                    '${_loc.availability} $index',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1787,7 +1787,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    status.isEmpty ? 'UNKNOWN' : status,
+                    _loc.statusLabel(status.isEmpty ? 'UNKNOWN' : status),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -1814,7 +1814,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                     ),
                     builder: (context, snap) {
                       return Text(
-                        snap.data ?? 'Loading address...',
+                        snap.data ?? _loc.loadingAddress,
                         style: const TextStyle(
                           fontSize: 13,
                           color: AppColors.text2,
@@ -1839,8 +1839,8 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
             ),
             if (availability.windows.isNotEmpty) ...[
               const SizedBox(height: 10),
-              const Text(
-                'Time Windows',
+              Text(
+                _loc.timeWindows,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,

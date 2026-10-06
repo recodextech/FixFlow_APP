@@ -6,8 +6,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../models/process.dart';
 import '../models/worker.dart';
+import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
 import '../theme.dart';
@@ -58,14 +61,18 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     'MAINTENANCE',
   ];
 
+  AppLocalizations get _loc => AppLocalizations.of(
+    Provider.of<LanguageProvider>(context, listen: false).locale,
+  );
+
   String _parentTypeLabel(String parentType) {
     switch (parentType) {
       case 'HOUSE_REPAIR':
-        return 'House Repair';
+        return _loc.houseRepair;
       case 'GARDEN_WORKS':
-        return 'Garden Works';
+        return _loc.gardenWorks;
       case 'MAINTENANCE':
-        return 'Maintenance';
+        return _loc.maintenance;
       default:
         return parentType
             .replaceAll('_', ' ')
@@ -130,9 +137,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     final description = category.description.trim();
     if (description.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No description available for this category.'),
-        ),
+        SnackBar(content: Text(_loc.noDescriptionAvailableForThisCategory)),
       );
       return;
     }
@@ -145,7 +150,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: Text(_loc.ok),
           ),
         ],
       ),
@@ -154,7 +159,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
   Widget _buildCategoryInfoButton(Category category) {
     return IconButton(
-      tooltip: 'Category description',
+      tooltip: _loc.categoryDescription,
       icon: const Icon(Icons.help_outline, size: 18, color: Colors.black54),
       splashRadius: 18,
       onPressed: () => _showCategoryDescription(category),
@@ -223,7 +228,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                         ),
                       ),
                       Text(
-                        'subcategories',
+                        _loc.subcategoriesLabel,
                         style: TextStyle(
                           fontSize: 10.5,
                           color: Colors.grey.shade700,
@@ -340,16 +345,16 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select one category')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_loc.pleaseSelectOneCategory)));
       return;
     }
 
     if (_selectedWalletId == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Please select a wallet')));
+      ).showSnackBar(SnackBar(content: Text(_loc.pleaseSelectWallet)));
       return;
     }
 
@@ -388,7 +393,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ).showSnackBar(SnackBar(content: Text('${_loc.error}: $e')));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -468,6 +473,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context.watch<LanguageProvider>().locale);
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
       child: SizedBox(
@@ -483,19 +489,19 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                 children: [
                   _buildHeader(),
                   const SizedBox(height: 16),
-                  _buildSectionLabel('Job Details'),
+                  _buildSectionLabel(loc.jobDetails),
                   const SizedBox(height: 12),
                   _buildJobFields(),
                   const SizedBox(height: 16),
                   _buildJobPhotosSection(),
                   const SizedBox(height: 12),
-                  _buildSectionLabel('Job Location'),
+                  _buildSectionLabel(loc.jobLocation),
                   const SizedBox(height: 12),
                   _buildLocationMap(),
                   const SizedBox(height: 12),
                   _buildCategoryDropdown(),
                   const SizedBox(height: 20),
-                  _buildSectionLabel('Payment Details'),
+                  _buildSectionLabel(loc.paymentDetails),
                   const SizedBox(height: 12),
                   _buildAmountField(),
                   const SizedBox(height: 24),
@@ -510,9 +516,9 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   }
 
   Widget _buildHeader() {
-    return const Text(
-      'Create Job',
-      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+    return Text(
+      _loc.createJob,
+      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
     );
   }
 
@@ -528,34 +534,35 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   }
 
   Widget _buildJobFields() {
+    final loc = _loc;
     return Column(
       children: [
         TextFormField(
           controller: _processNameController,
-          decoration: const InputDecoration(
-            labelText: 'Job Title',
-            hintText: 'Enter a short job title',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: loc.jobTitle,
+            hintText: loc.hintJobTitle,
+            border: const OutlineInputBorder(),
           ),
           onChanged: (_) => setState(() {}),
           maxLength: 80,
           validator: (value) => (value == null || value.trim().isEmpty)
-              ? 'Please enter a job title'
+              ? loc.pleaseEnterJobTitle
               : null,
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: _processDescriptionController,
-          decoration: const InputDecoration(
-            labelText: 'Process Description',
-            hintText: 'Describe the overall service or process',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: loc.processDescription,
+            hintText: loc.hintProcessDescription,
+            border: const OutlineInputBorder(),
           ),
           maxLength: 100,
           maxLines: 2,
           onChanged: (_) => setState(() {}),
           validator: (value) => (value == null || value.trim().isEmpty)
-              ? 'Please enter process description'
+              ? loc.pleaseEnterProcessDescription
               : null,
         ),
         const SizedBox(height: 12),
@@ -563,8 +570,8 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
           controller: _startTimeController,
           readOnly: true,
           decoration: InputDecoration(
-            labelText: 'Start Time',
-            hintText: 'Pick date and time from calendar',
+            labelText: loc.startTime,
+            hintText: loc.hintStartTime,
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: const Icon(Icons.calendar_today),
@@ -574,18 +581,18 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
           onTap: _selectStartTime,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'Please enter start time';
+              return loc.pleaseEnterStartTime;
             }
             final trimmed = value.trim();
             if (!_jobStartFormat.hasMatch(trimmed)) {
-              return 'Use format: YYYY-MM-DDTHH:MM';
+              return loc.formatYYYYMMDDHHMM;
             }
             final start = DateTime.tryParse(trimmed);
             if (start == null) {
-              return 'Invalid start date/time';
+              return loc.invalidStartDateTime;
             }
             if (_maxDurationHoursForJobStart(start) < 1) {
-              return 'Start is too late: no full hour remains before midnight';
+              return loc.startTooLateNotEnoughHours;
             }
             return null;
           },
@@ -598,10 +605,10 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
               return TextFormField(
                 controller: _durationController,
                 readOnly: true,
-                decoration: const InputDecoration(
-                  labelText: 'Duration (hours)',
-                  hintText: 'Pick start date & time first',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: loc.durationHours,
+                  hintText: loc.hintPickStartDateFirst,
+                  border: const OutlineInputBorder(),
                 ),
                 validator: (_) => null,
               );
@@ -609,7 +616,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
             final maxHours = _maxDurationHoursForJobStart(start);
             if (maxHours < 1) {
               return Text(
-                'Not enough time before midnight for this start time. Pick an earlier start.',
+                loc.notEnoughTimeBeforeMidnight,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
                   fontSize: 13,
@@ -627,15 +634,15 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                 .clamp(1, maxHours);
             return DropdownButtonFormField<int>(
               initialValue: value,
-              decoration: const InputDecoration(
-                labelText: 'Duration (hours, until midnight, max 12)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: loc.durationHoursLongLabel,
+                border: const OutlineInputBorder(),
               ),
               items: List.generate(
                 maxHours,
                 (i) => DropdownMenuItem(
                   value: i + 1,
-                  child: Text('${i + 1} hour${i == 0 ? '' : 's'}'),
+                  child: Text(loc.hoursCount(i + 1)),
                 ),
               ),
               onChanged: (v) {
@@ -645,7 +652,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
               validator: (_) {
                 final d = int.tryParse(_durationController.text.trim());
                 if (d == null || d < 1 || d > maxHours) {
-                  return 'Choose a duration from 1 to $maxHours hour(s)';
+                  return loc.chooseDurationFromTo(maxHours);
                 }
                 return null;
               },
@@ -662,13 +669,14 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'You can attach at most ${JobPhotoUpload.maxPhotosPerJob} photos.',
+            _loc.canAttachAtMostPhotos(JobPhotoUpload.maxPhotosPerJob),
           ),
         ),
       );
       return;
     }
 
+    final loc = _loc;
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -678,7 +686,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take photo'),
+              title: Text(loc.takePhoto),
               onTap: () {
                 Navigator.pop(ctx);
                 _addJobPhoto(ImageSource.camera);
@@ -686,7 +694,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from gallery'),
+              title: Text(loc.chooseFromGallery),
               onTap: () {
                 Navigator.pop(ctx);
                 _addJobPhoto(ImageSource.gallery);
@@ -710,7 +718,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Could not add photo: $e')));
+      ).showSnackBar(SnackBar(content: Text(_loc.couldNotAddPhoto('$e'))));
     } finally {
       if (mounted) setState(() => _isAddingJobPhoto = false);
     }
@@ -724,10 +732,10 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionLabel('Job photos (optional)'),
+        _buildSectionLabel(_loc.jobPhotosOptional),
         const SizedBox(height: 8),
         Text(
-          'Up to ${JobPhotoUpload.maxPhotosPerJob} images, compressed as JPEG for smaller requests.',
+          _loc.hintUploadPhotos(JobPhotoUpload.maxPhotosPerJob),
           style: TextStyle(fontSize: 12, color: Colors.grey[700]),
         ),
         const SizedBox(height: 8),
@@ -866,14 +874,21 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                     color: Colors.black54,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.touch_app, color: Colors.white, size: 16),
-                      SizedBox(width: 6),
+                      const Icon(
+                        Icons.touch_app,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
                       Text(
-                        'Tap to pick location',
-                        style: TextStyle(color: Colors.white, fontSize: 12),
+                        _loc.tapToPickLocation,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -899,15 +914,15 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         if (snapshot.hasError) {
           return Padding(
             padding: const EdgeInsets.all(12),
-            child: Text('Error: ${snapshot.error}'),
+            child: Text('${_loc.error}: ${snapshot.error}'),
           );
         }
 
         final categories = snapshot.data ?? [];
         if (categories.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(12),
-            child: Text('No categories available'),
+          return Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(_loc.noCategoriesAvailable),
           );
         }
 
@@ -941,9 +956,9 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: Colors.grey.shade300),
                     ),
-                    child: const Text(
-                      'Select a category type above to see subcategories.',
-                      style: TextStyle(
+                    child: Text(
+                      _loc.selectCategoryTypeAboveToSeeSubcategories,
+                      style: const TextStyle(
                         fontSize: 12.5,
                         color: Colors.black54,
                         fontWeight: FontWeight.w600,
@@ -955,7 +970,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${_parentTypeLabel(_selectedParentType!)} Subcategories',
+                        '${_parentTypeLabel(_selectedParentType!)} ${_loc.subcategoriesLabel}',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -1007,9 +1022,12 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                     ],
                   ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Selected Category',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                Text(
+                  _loc.selectedCategory,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 if (selectedCategory.isEmpty)
@@ -1020,9 +1038,12 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Text(
-                      'No category selected yet.',
-                      style: TextStyle(fontSize: 12.5, color: Colors.black54),
+                    child: Text(
+                      _loc.noCategorySelectedYet,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.black54,
+                      ),
                     ),
                   )
                 else
@@ -1067,7 +1088,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     return TextFormField(
       controller: _amountController,
       decoration: InputDecoration(
-        labelText: 'Amount',
+        labelText: _loc.amount,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         prefixIcon: const Icon(Icons.attach_money),
         prefixText: '${AppConstants.currencySymbol} ',
@@ -1083,9 +1104,11 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
       style: const TextStyle(fontSize: 16),
       onChanged: (_) => setState(() {}),
       validator: (value) {
-        if (value == null || value.trim().isEmpty) return 'Please enter amount';
+        if (value == null || value.trim().isEmpty) {
+          return _loc.pleaseEnterAmount;
+        }
         final parsed = double.tryParse(value);
-        if (parsed == null || parsed <= 0) return 'Enter a valid amount';
+        if (parsed == null || parsed <= 0) return _loc.enterValidAmount;
         return null;
       },
     );
@@ -1097,7 +1120,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
       children: [
         TextButton(
           onPressed: _isSubmitting ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(_loc.cancel),
         ),
         const SizedBox(width: 12),
         ElevatedButton(
@@ -1123,7 +1146,9 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
                     color: Colors.white,
                   ),
                 )
-              : Text(_canCreateJob ? 'Create Job' : 'Complete required fields'),
+              : Text(
+                  _canCreateJob ? _loc.createJob : _loc.completeRequiredFields,
+                ),
         ),
       ],
     );

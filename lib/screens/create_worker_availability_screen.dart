@@ -7,7 +7,9 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../models/availability.dart';
+import '../providers/language_provider.dart';
 import '../providers/worker_provider.dart';
 import '../services/preferences_service.dart';
 import 'location_picker_screen.dart';
@@ -229,33 +231,33 @@ class _CreateWorkerAvailabilityScreenState
     return true;
   }
 
-  String? _validateForm() {
+  String? _validateForm(AppLocalizations loc) {
     if (_startDate == null) {
-      return 'Please select a start date';
+      return loc.pleaseSelectStartDate;
     }
 
     if (_endDate == null) {
-      return 'Please select an end date';
+      return loc.pleaseSelectEndDate;
     }
 
     if (_endDate!.isBefore(_startDate!)) {
-      return 'End date must be on or after start date';
+      return loc.endDateMustBeAfterStart;
     }
 
     for (var index = 0; index < _timeWindows.length; index++) {
       final window = _timeWindows[index];
       if (window.startTime == null) {
-        return 'Please select start time for window ${index + 1}';
+        return '${loc.pleaseSelectStartTimeForWindow} ${index + 1}';
       }
       if (window.duration <= 0) {
-        return 'Duration must be greater than 0 for window ${index + 1}';
+        return '${loc.durationMustBeGreaterThanZero} ${index + 1}';
       }
       final maxH = _maxDurationHoursForStart(window.startTime!);
       if (maxH < 1) {
-        return 'Window ${index + 1}: start time is too late for any full-hour slot before midnight';
+        return '${loc.window} ${index + 1}: ${loc.startTimeTooLateForSlot}';
       }
       if (window.duration > maxH) {
-        return 'Window ${index + 1}: duration cannot exceed $maxH hour(s) until midnight (max 12 hours)';
+        return '${loc.window} ${index + 1}: ${loc.durationCannotExceedMaxHours} $maxH';
       }
     }
 
@@ -267,7 +269,13 @@ class _CreateWorkerAvailabilityScreenState
   }
 
   Future<void> _submit() async {
-    final validationError = _validateForm();
+    final languageProvider = Provider.of<LanguageProvider>(
+      context,
+      listen: false,
+    );
+    final loc = AppLocalizations.of(languageProvider.locale);
+
+    final validationError = _validateForm(loc);
     if (validationError != null) {
       ScaffoldMessenger.of(
         context,
@@ -277,11 +285,9 @@ class _CreateWorkerAvailabilityScreenState
 
     final accountId = PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account ID is missing. Please re-login.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(loc.accountIdMissing)));
       return;
     }
 
@@ -317,14 +323,14 @@ class _CreateWorkerAvailabilityScreenState
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Availability created successfully')),
+        SnackBar(content: Text(loc.availabilityCreatedSuccessfully)),
       );
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create availability: $e')),
+        SnackBar(content: Text('${loc.failedToCreateAvailability}: $e')),
       );
     } finally {
       if (mounted) {
@@ -337,312 +343,338 @@ class _CreateWorkerAvailabilityScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Availability'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.home_outlined),
-            onPressed: () => Navigator.pushNamedAndRemoveUntil(
-              context,
-              '/home',
-              (route) => false,
-            ),
+    return Consumer<LanguageProvider>(
+      builder: (context, languageProvider, _) {
+        final loc = AppLocalizations.of(languageProvider.locale);
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(loc.addAvailability),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.home_outlined),
+                onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/home',
+                  (route) => false,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Location',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _openLocationPicker,
-              child: SizedBox(
-                height: 200,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Stack(
-                    children: [
-                      IgnorePointer(
-                        child: FlutterMap(
-                          mapController: _mapController,
-                          options: MapOptions(
-                            initialCenter: _selectedLocation,
-                            initialZoom: _mapZoom,
-                          ),
-                          children: [
-                            TileLayer(
-                              urlTemplate:
-                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                              userAgentPackageName: 'com.noventispvt.fixflow',
-                            ),
-                            MarkerLayer(
-                              markers: [
-                                Marker(
-                                  point: _selectedLocation,
-                                  width: 40,
-                                  height: 40,
-                                  child: const Icon(
-                                    Icons.location_pin,
-                                    color: Colors.red,
-                                    size: 40,
-                                  ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  loc.location,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _openLocationPicker,
+                  child: SizedBox(
+                    height: 200,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        children: [
+                          IgnorePointer(
+                            child: FlutterMap(
+                              mapController: _mapController,
+                              options: MapOptions(
+                                initialCenter: _selectedLocation,
+                                initialZoom: _mapZoom,
+                              ),
+                              children: [
+                                TileLayer(
+                                  urlTemplate:
+                                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                  userAgentPackageName:
+                                      'com.noventispvt.fixflow',
+                                ),
+                                MarkerLayer(
+                                  markers: [
+                                    Marker(
+                                      point: _selectedLocation,
+                                      width: 40,
+                                      height: 40,
+                                      child: const Icon(
+                                        Icons.location_pin,
+                                        color: Colors.red,
+                                        size: 40,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 8,
-                        left: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.touch_app,
-                                color: Colors.white,
-                                size: 16,
+                          Positioned(
+                            bottom: 8,
+                            left: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
                               ),
-                              SizedBox(width: 6),
-                              Text(
-                                'Tap to pick location',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                ),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(6),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.location_on, size: 18, color: Colors.red),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _isLoadingAddress
-                      ? const Text(
-                          'Looking up address...',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
-                        )
-                      : Text(
-                          _selectedAddress,
-                          style: const TextStyle(fontSize: 13),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Availability Range',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _pickStartDate,
-                    icon: const Icon(Icons.calendar_today),
-                    label: Text(
-                      _startDate == null
-                          ? 'Start Date'
-                          : _dateFormat.format(_startDate!),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _pickEndDate,
-                    icon: const Icon(Icons.event),
-                    label: Text(
-                      _endDate == null
-                          ? 'End Date'
-                          : _dateFormat.format(_endDate!),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _frequency,
-              decoration: const InputDecoration(
-                labelText: 'Frequency',
-                border: OutlineInputBorder(),
-              ),
-              items: const [
-                DropdownMenuItem(value: 'daily', child: Text('Daily')),
-                DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() {
-                  _frequency = value;
-                });
-              },
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Time Windows',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            ..._timeWindows.asMap().entries.map((entry) {
-              final index = entry.key;
-              final window = entry.value;
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Window ${index + 1}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          IconButton(
-                            onPressed: _timeWindows.length == 1
-                                ? null
-                                : () => _removeTimeWindow(index),
-                            icon: const Icon(Icons.delete_outline),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.touch_app,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    loc.tapToPickLocation,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: () => _pickTimeWindowStart(index),
-                        icon: const Icon(Icons.schedule),
-                        label: Text(
-                          window.startTime == null
-                              ? 'Select Start Time'
-                              : window.startTime!.format(context),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Builder(
-                        builder: (context) {
-                          final maxHours = _effectiveMaxDurationHours(
-                            window.startTime,
-                          );
-                          if (maxHours < 1) {
-                            return Text(
-                              'Not enough time before midnight for this start time. Pick an earlier start.',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                                fontSize: 13,
-                              ),
-                            );
-                          }
-                          if (window.duration > maxHours) {
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (!context.mounted) return;
-                              setState(() {
-                                window.duration = maxHours;
-                              });
-                            });
-                          }
-                          return DropdownButtonFormField<int>(
-                            initialValue: window.duration > maxHours
-                                ? maxHours
-                                : window.duration,
-                            decoration: const InputDecoration(
-                              labelText:
-                                  'Duration (hours, until midnight, max 12)',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: List.generate(
-                              maxHours,
-                              (i) => DropdownMenuItem(
-                                value: i + 1,
-                                child: Text(
-                                  '${i + 1} hour${i == 0 ? '' : 's'}',
-                                ),
-                              ),
-                            ),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() {
-                                window.duration = value;
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              );
-            }),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                onPressed: _addTimeWindow,
-                icon: const Icon(Icons.add),
-                label: const Text('Add time window'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _canCreateAvailability ? _submit : null,
-                icon: const Icon(Icons.check),
-                label: _isSubmitting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(
-                        _canCreateAvailability
-                            ? 'Create Availability'
-                            : 'Complete required fields',
-                      ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _canCreateAvailability ? Colors.green : null,
-                  foregroundColor: _canCreateAvailability ? Colors.white : null,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, size: 18, color: Colors.red),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: _isLoadingAddress
+                          ? Text(
+                              loc.loadingAddress,
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            )
+                          : Text(
+                              _selectedAddress,
+                              style: const TextStyle(fontSize: 13),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                    ),
+                  ],
                 ),
-              ),
+                const SizedBox(height: 16),
+                Text(
+                  loc.availabilityRange,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickStartDate,
+                        icon: const Icon(Icons.calendar_today),
+                        label: Text(
+                          _startDate == null
+                              ? loc.startDate
+                              : _dateFormat.format(_startDate!),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickEndDate,
+                        icon: const Icon(Icons.event),
+                        label: Text(
+                          _endDate == null
+                              ? loc.endDate
+                              : _dateFormat.format(_endDate!),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: _frequency,
+                  decoration: InputDecoration(
+                    labelText: loc.frequency,
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: [
+                    DropdownMenuItem(value: 'daily', child: Text(loc.daily)),
+                    DropdownMenuItem(value: 'weekly', child: Text(loc.weekly)),
+                    DropdownMenuItem(
+                      value: 'monthly',
+                      child: Text(loc.monthly),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _frequency = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  loc.timeWindows,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ..._timeWindows.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final window = entry.value;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '${loc.window} ${index + 1}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _timeWindows.length == 1
+                                    ? null
+                                    : () => _removeTimeWindow(index),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: () => _pickTimeWindowStart(index),
+                            icon: const Icon(Icons.schedule),
+                            label: Text(
+                              window.startTime == null
+                                  ? loc.startDate
+                                  : window.startTime!.format(context),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Builder(
+                            builder: (context) {
+                              final maxHours = _effectiveMaxDurationHours(
+                                window.startTime,
+                              );
+                              if (maxHours < 1) {
+                                return Text(
+                                  loc.notEnoughTimeBeforeMidnight,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 13,
+                                  ),
+                                );
+                              }
+                              if (window.duration > maxHours) {
+                                WidgetsBinding.instance.addPostFrameCallback((
+                                  _,
+                                ) {
+                                  if (!context.mounted) return;
+                                  setState(() {
+                                    window.duration = maxHours;
+                                  });
+                                });
+                              }
+                              return DropdownButtonFormField<int>(
+                                initialValue: window.duration > maxHours
+                                    ? maxHours
+                                    : window.duration,
+                                decoration: InputDecoration(
+                                  labelText: loc.durationHoursLongLabel,
+                                  border: const OutlineInputBorder(),
+                                ),
+                                items: List.generate(
+                                  maxHours,
+                                  (i) => DropdownMenuItem(
+                                    value: i + 1,
+                                    child: Text(loc.hoursCount(i + 1)),
+                                  ),
+                                ),
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  setState(() {
+                                    window.duration = value;
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: _addTimeWindow,
+                    icon: const Icon(Icons.add),
+                    label: Text(loc.addTimeWindow),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _canCreateAvailability ? _submit : null,
+                    icon: const Icon(Icons.check),
+                    label: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _canCreateAvailability
+                                ? loc.addAvailability
+                                : loc.completeRequiredFields,
+                          ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _canCreateAvailability
+                          ? Colors.green
+                          : null,
+                      foregroundColor: _canCreateAvailability
+                          ? Colors.white
+                          : null,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

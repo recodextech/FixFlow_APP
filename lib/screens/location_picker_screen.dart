@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
+import '../providers/language_provider.dart';
 
 class LocationPickerScreen extends StatefulWidget {
   final LatLng initialLocation;
@@ -134,15 +137,24 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<LanguageProvider>(
+      builder: (context, languageProvider, _) {
+        final loc = AppLocalizations.of(languageProvider.locale);
+        return _buildLocationPickerUI(context, loc);
+      },
+    );
+  }
+
+  Widget _buildLocationPickerUI(BuildContext context, AppLocalizations loc) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pick Location'),
+        title: Text(loc.pickLocation),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, _pickedLocation),
-            child: const Text(
-              'Done',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            child: Text(
+              loc.done,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -155,7 +167,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               controller: _searchController,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Search location...',
+                hintText: loc.searchLocation,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _isSearching
                     ? const Padding(

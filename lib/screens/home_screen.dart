@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../services/preferences_service.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
+import '../providers/language_provider.dart';
+import '../l10n/app_localizations.dart';
 import '../utils/performance_utils.dart';
 import 'worker_profile_screen.dart';
 import 'contractor_profile_screen.dart';
@@ -152,6 +155,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final workerFirstName = _getFirstName(workerName);
     final contractorFirstName = _getFirstName(contractorName);
 
+    final loc = AppLocalizations.of(
+      Provider.of<LanguageProvider>(context, listen: false).locale,
+    );
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -176,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Column(
                     children: [
                       Text(
-                        'Welcome back${hasWorker && workerFirstName.isNotEmpty
+                        '${loc.welcomeBack}${hasWorker && workerFirstName.isNotEmpty
                             ? ', $workerFirstName'
                             : hasContractor && contractorFirstName.isNotEmpty
                             ? ', $contractorFirstName'
@@ -199,10 +206,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (!hasWorker && !hasContractor)
                   _RoleCard(
                     icon: Icons.person_add_alt_1_rounded,
-                    title: 'Create User Profile',
-                    subtitle:
-                        'Create one user and continue as a worker or contractor',
-                    buttonLabel: 'Create User',
+                    title: loc.createUserProfile,
+                    subtitle: loc.createOneUserContinue,
+                    buttonLabel: loc.createUser,
                     gradient: AppColors.loginGradient,
                     photoBase64: null,
                     fullName: null,
@@ -214,9 +220,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.groups_rounded,
                       title: workerFirstName.isNotEmpty
                           ? workerFirstName
-                          : 'Worker Profile',
-                      subtitle: 'Continue to your worker profile',
-                      buttonLabel: 'Continue as Worker',
+                          : loc.workerProfile,
+                      subtitle: loc.continueToWorkerProfile,
+                      buttonLabel: loc.continueAsWorker,
                       gradient: AppColors.workerGradient,
                       photoBase64: workerPhotoBase64,
                       fullName: workerName,
@@ -228,9 +234,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.apartment_rounded,
                       title: contractorFirstName.isNotEmpty
                           ? contractorFirstName
-                          : 'Contractor Profile',
-                      subtitle: 'Continue to your contractor profile',
-                      buttonLabel: 'Continue as Contractor',
+                          : loc.contractorProfile,
+                      subtitle: loc.continueToContractorProfile,
+                      buttonLabel: loc.continueAsContractor,
                       gradient: AppColors.contractorOrangeGradient,
                       photoBase64: contractorPhotoBase64,
                       fullName: contractorName,
@@ -250,6 +256,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+      floatingActionButton: const _LanguageToggleButton(),
     );
   }
 }
@@ -396,6 +403,7 @@ class _HomeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context.watch<LanguageProvider>().locale);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -449,7 +457,7 @@ class _HomeHeader extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Worker & Contractor Manager',
+            loc.homeTagline,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
@@ -469,21 +477,30 @@ class _AboutUsCard extends StatelessWidget {
     final telUri = Uri(scheme: 'tel', path: phoneNumber);
     final launched = await launchUrl(telUri);
     if (!launched) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(content: Text('Unable to open phone dialer')),
+      final loc = AppLocalizations.of(
+        Provider.of<LanguageProvider>(context, listen: false).locale,
       );
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(loc.unableToOpenPhoneDialer)));
     }
   }
 
   Future<void> _copyEmail(BuildContext context, String email) async {
+    final loc = AppLocalizations.of(
+      Provider.of<LanguageProvider>(context, listen: false).locale,
+    );
     await Clipboard.setData(ClipboardData(text: email));
     ScaffoldMessenger.maybeOf(
       context,
-    )?.showSnackBar(const SnackBar(content: Text('Email copied to clipboard')));
+    )?.showSnackBar(SnackBar(content: Text(loc.emailCopiedToClipboard)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(
+      Provider.of<LanguageProvider>(context, listen: false).locale,
+    );
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -538,9 +555,9 @@ class _AboutUsCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Text(
-                    'About Us',
-                    style: TextStyle(
+                  Text(
+                    loc.aboutUs,
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -550,7 +567,7 @@ class _AboutUsCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Need help or partnership details? Reach our team directly:',
+                loc.needHelpReachTeam,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.88),
                   height: 1.35,
@@ -560,18 +577,18 @@ class _AboutUsCard extends StatelessWidget {
               const SizedBox(height: 14),
               _ContactTile(
                 icon: Icons.phone_rounded,
-                label: 'Phone',
+                label: loc.phone,
                 value: '077 644 3476',
-                actionLabel: 'Tap to call',
+                actionLabel: loc.tapToCall,
                 trailingIcon: Icons.call_rounded,
                 onTap: () => _callPhone(context, '0776443476'),
               ),
               const SizedBox(height: 10),
               _ContactTile(
                 icon: Icons.email_rounded,
-                label: 'Email',
+                label: loc.email,
                 value: 'inquiries@noventispvt.xyz',
-                actionLabel: 'Tap to copy',
+                actionLabel: loc.tapToCopy,
                 trailingIcon: Icons.copy_rounded,
                 onTap: () => _copyEmail(context, 'inquiries@noventispvt.xyz'),
               ),
@@ -673,9 +690,12 @@ class _WhoAreYouText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Text(
-      'Who are you?',
-      style: TextStyle(
+    final loc = AppLocalizations.of(
+      Provider.of<LanguageProvider>(context, listen: false).locale,
+    );
+    return Text(
+      loc.whoAreYou,
+      style: const TextStyle(
         fontSize: 24,
         fontWeight: FontWeight.w700,
         color: Colors.white,
@@ -691,15 +711,18 @@ class _LogoutButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(
+      Provider.of<LanguageProvider>(context, listen: false).locale,
+    );
     return SizedBox(
       width: double.infinity,
       height: 48,
       child: OutlinedButton.icon(
         onPressed: onLogout,
         icon: const Icon(Icons.logout_rounded, size: 18),
-        label: const Text(
-          'Sign Out',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        label: Text(
+          loc.logout,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
         ),
         style: OutlinedButton.styleFrom(
           foregroundColor: Colors.white,
@@ -709,6 +732,37 @@ class _LogoutButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _LanguageToggleButton extends StatelessWidget {
+  const _LanguageToggleButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<LanguageProvider>(
+      builder: (context, languageProvider, _) {
+        final isEnglish = languageProvider.isEnglish;
+
+        return FloatingActionButton(
+          onPressed: () {
+            languageProvider.switchBetweenLanguages();
+          },
+          backgroundColor: Colors.white.withValues(alpha: 0.95),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            isEnglish ? 'සි' : 'EN',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.brandGreen,
+            ),
+          ),
+        );
+      },
     );
   }
 }

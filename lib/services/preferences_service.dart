@@ -27,6 +27,7 @@ class PreferencesService {
   static const String _workerPhotoKey = 'worker_photo_base64';
   static const String _contractorPhotoKey = 'contractor_photo_base64';
   static const String _deviceIdKey = 'device_id';
+  static const String _languageKey = 'app_language';
 
   /// Load user accounts data from API response into memory.
   void loadUserAccounts({
@@ -146,6 +147,14 @@ class PreferencesService {
     return _prefs.getString(_selectedTypeKey);
   }
 
+  Future<void> setLanguage(String languageCode) async {
+    await _prefs.setString(_languageKey, languageCode);
+  }
+
+  String getLanguage() {
+    return _prefs.getString(_languageKey) ?? 'en';
+  }
+
   String? getWorkerName() => _worker?.workerName;
 
   String? getContractorName() => _contractor?.contractorName;
@@ -165,6 +174,7 @@ class PreferencesService {
     await _prefs.remove(_selectedTypeKey);
     await _prefs.remove(_workerPhotoKey);
     await _prefs.remove(_contractorPhotoKey);
+    await _prefs.remove(_languageKey);
   }
 
   bool hasWorkerProfile() => _worker != null;

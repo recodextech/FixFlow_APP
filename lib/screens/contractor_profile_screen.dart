@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 import '../models/contractor.dart';
 import '../models/process.dart';
 import '../providers/contractor_provider.dart';
+import '../providers/language_provider.dart';
 import '../services/preferences_service.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import '../widgets/job_images_widget.dart';
 import '../widgets/profile_avatar.dart';
+import '../l10n/app_localizations.dart';
 import 'contractor_info_screen.dart';
 import 'contractor_widgets.dart';
 import 'create_process_dialog.dart';
@@ -15,10 +17,7 @@ import 'create_process_dialog.dart';
 class ContractorProfileScreen extends StatefulWidget {
   final String contractorId;
 
-  const ContractorProfileScreen({
-    super.key,
-    required this.contractorId,
-  });
+  const ContractorProfileScreen({super.key, required this.contractorId});
 
   @override
   State<ContractorProfileScreen> createState() =>
@@ -40,9 +39,9 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     _tabController.addListener(_onTabChanged);
     final accountId = PreferencesService().getAccountId();
     _contractorFuture = context.read<ContractorProvider>().getContractor(
-          widget.contractorId,
-          accountId: accountId,
-        );
+      widget.contractorId,
+      accountId: accountId,
+    );
     _activeProcessesFuture = _loadActiveProcesses();
   }
 
@@ -78,12 +77,16 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     );
   }
 
+  AppLocalizations get _loc => AppLocalizations.of(
+    Provider.of<LanguageProvider>(context, listen: false).locale,
+  );
+
   Future<void> _showCreateProcessDialog() async {
     final accountId = PreferencesService().getAccountId();
     if (accountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account ID not found')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_loc.accountIdMissing)));
       return;
     }
 
@@ -101,9 +104,9 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
       _activeProcessesFuture = _loadActiveProcesses();
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Process created successfully')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_loc.processCreatedSuccessfully)));
   }
 
   Future<void> _openContractorInfo({Contractor? contractor}) async {
@@ -140,13 +143,13 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
         _activeProcessesFuture = _loadActiveProcesses();
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Process deleted successfully')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_loc.processDeletedSuccessfully)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete process: $e')),
+        SnackBar(content: Text('${_loc.failedToDeleteProcess}: $e')),
       );
     }
   }
@@ -155,17 +158,21 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Job'),
-        content: Text('Are you sure you want to delete "${process.name.isNotEmpty ? process.name : 'this job'}"?'),
+        title: Text(_loc.deleteJob),
+        content: Text(
+          _loc.confirmDeleteJob(
+            process.name.isNotEmpty ? process.name : _loc.thisJob,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(_loc.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.red),
-            child: const Text('Delete'),
+            child: Text(_loc.delete),
           ),
         ],
       ),
@@ -183,19 +190,28 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     final status = process.status.toUpperCase();
     final isPendingOrCreated = status == 'PENDING' || status == 'CREATED';
     final isNotAssigned = (process.job?.assignedWorkerId ?? '').isEmpty;
-    
+
     return isPendingOrCreated && isNotAssigned;
   }
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<LanguageProvider>(
+      builder: (context, languageProvider, _) {
+        final loc = AppLocalizations.of(languageProvider.locale);
+        return _buildContractorProfileUI(context, loc);
+      },
+    );
+  }
+
+  Widget _buildContractorProfileUI(BuildContext context, AppLocalizations loc) {
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showCreateProcessDialog,
         backgroundColor: AppColors.blue,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
-        label: const Text('New Job'),
+        label: Text(loc.newJob),
       ),
       body: FutureBuilder<Contractor?>(
         future: _contractorFuture,
@@ -211,20 +227,24 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                 children: [
                   Icon(Icons.error_outline, size: 48, color: AppColors.red),
                   const SizedBox(height: 16),
-                  Text('Error: ${snapshot.error}',
-                      style: const TextStyle(color: AppColors.text2)),
+                  Text(
+                    '${loc.error}: ${snapshot.error}',
+                    style: const TextStyle(color: AppColors.text2),
+                  ),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
                       setState(() {
                         _contractorFuture = context
                             .read<ContractorProvider>()
-                            .getContractor(widget.contractorId,
-                                accountId: PreferencesService().getAccountId());
+                            .getContractor(
+                              widget.contractorId,
+                              accountId: PreferencesService().getAccountId(),
+                            );
                         _activeProcessesFuture = _loadActiveProcesses();
                       });
                     },
-                    child: const Text('Retry'),
+                    child: Text(loc.retry),
                   ),
                 ],
               ),
@@ -236,14 +256,21 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.business_outlined, size: 48, color: AppColors.gray5),
+                  Icon(
+                    Icons.business_outlined,
+                    size: 48,
+                    color: AppColors.gray5,
+                  ),
                   const SizedBox(height: 16),
-                  const Text('Contractor profile not found'),
+                  Text(loc.contractorProfileNotFound),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                        context, '/home', (_) => false),
-                    child: const Text('Go to Home'),
+                      context,
+                      '/home',
+                      (_) => false,
+                    ),
+                    child: Text(loc.goToHome),
                   ),
                 ],
               ),
@@ -266,7 +293,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                 headerSliverBuilder: (context, innerBoxIsScrolled) {
                   return [
                     SliverToBoxAdapter(
-                      child: _buildGradientHeader(contractor),
+                      child: _buildGradientHeader(contractor, loc),
                     ),
                     SliverPersistentHeader(
                       pinned: true,
@@ -282,7 +309,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Text('Pending'),
+                                  Text(loc.pending),
                                   if (activeProcesses.isNotEmpty) ...[
                                     const SizedBox(width: 8),
                                     Container(
@@ -307,7 +334,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                                 ],
                               ),
                             ),
-                            const Tab(text: 'History'),
+                            Tab(text: loc.history),
                           ],
                         ),
                       ),
@@ -320,59 +347,64 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                     activeSnapshot.connectionState == ConnectionState.waiting
                         ? const Center(child: CircularProgressIndicator())
                         : activeSnapshot.hasError
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.warning_amber_rounded,
-                                        size: 48, color: AppColors.orange),
-                                    const SizedBox(height: 12),
-                                    const Text('Could not load processes'),
-                                    TextButton.icon(
-                                      onPressed: () => setState(() {
-                                        _activeProcessesFuture =
-                                            _loadActiveProcesses();
-                                      }),
-                                      icon: const Icon(Icons.refresh),
-                                      label: const Text('Retry'),
-                                    ),
-                                  ],
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 48,
+                                  color: AppColors.orange,
                                 ),
-                              )
-                            : _buildProcessList(
-                                activeProcesses,
-                                'No pending processes',
-                                'New processes will appear here.',
-                              ),
+                                const SizedBox(height: 12),
+                                Text(loc.couldNotLoadProcesses),
+                                TextButton.icon(
+                                  onPressed: () => setState(() {
+                                    _activeProcessesFuture =
+                                        _loadActiveProcesses();
+                                  }),
+                                  icon: const Icon(Icons.refresh),
+                                  label: Text(loc.retry),
+                                ),
+                              ],
+                            ),
+                          )
+                        : _buildProcessList(
+                            activeProcesses,
+                            loc.noPendingProcesses,
+                            loc.newProcessesWillAppearHere,
+                          ),
                     FutureBuilder<List<ContractorProcessSummary>>(
                       future: _historyProcessesFuture,
                       builder: (context, historySnapshot) {
                         if (_historyProcessesFuture == null) {
-                          return const Center(
-                            child: Text('Press History to load'),
-                          );
+                          return Center(child: Text(loc.pressHistoryToLoad));
                         }
                         if (historySnapshot.connectionState ==
                             ConnectionState.waiting) {
                           return const Center(
-                              child: CircularProgressIndicator());
+                            child: CircularProgressIndicator(),
+                          );
                         }
                         if (historySnapshot.hasError) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.warning_amber_rounded,
-                                    size: 48, color: AppColors.orange),
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 48,
+                                  color: AppColors.orange,
+                                ),
                                 const SizedBox(height: 12),
-                                const Text('Could not load history'),
+                                Text(loc.couldNotLoadHistory),
                                 TextButton.icon(
                                   onPressed: () => setState(() {
                                     _historyProcessesFuture =
                                         _loadHistoryProcesses();
                                   }),
                                   icon: const Icon(Icons.refresh),
-                                  label: const Text('Retry'),
+                                  label: Text(loc.retry),
                                 ),
                               ],
                             ),
@@ -386,8 +418,8 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                           });
                         return _buildProcessList(
                           historyProcesses,
-                          'No completed processes',
-                          'Completed jobs will show here.',
+                          loc.noCompletedProcesses,
+                          loc.completedJobsWillShowHere,
                         );
                       },
                     ),
@@ -401,7 +433,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     );
   }
 
-  Widget _buildGradientHeader(Contractor contractor) {
+  Widget _buildGradientHeader(Contractor contractor, AppLocalizations loc) {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -423,9 +455,9 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                     child: const Icon(Icons.arrow_back, color: Colors.white),
                   ),
                   const Spacer(),
-                  const Text(
-                    'Contractor Dashboard',
-                    style: TextStyle(
+                  Text(
+                    loc.contractorDashboard,
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
@@ -441,11 +473,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
               const SizedBox(height: 20),
               Row(
                 children: [
-                  ProfileAvatar(
-                    id: contractor.id,
-                    isWorker: false,
-                    radius: 28,
-                  ),
+                  ProfileAvatar(id: contractor.id, isWorker: false, radius: 28),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -464,7 +492,9 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 3),
+                                horizontal: 10,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(20),
@@ -493,7 +523,10 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   }
 
   Widget _buildProcessList(
-      List<ContractorProcessSummary> processes, String emptyTitle, String emptySubtitle) {
+    List<ContractorProcessSummary> processes,
+    String emptyTitle,
+    String emptySubtitle,
+  ) {
     if (processes.isEmpty) {
       return Center(
         child: Padding(
@@ -503,13 +536,20 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
             children: [
               Icon(Icons.inbox_rounded, size: 48, color: AppColors.gray4),
               const SizedBox(height: 16),
-              Text(emptyTitle,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.text)),
+              Text(
+                emptyTitle,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
               const SizedBox(height: 6),
-              Text(emptySubtitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, color: AppColors.text2)),
+              Text(
+                emptySubtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: AppColors.text2),
+              ),
             ],
           ),
         ),
@@ -533,7 +573,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   }
 
   String _formatPayment(PaymentInformation payment) {
-    final method = payment.method ?? 'N/A';
+    final method = payment.method ?? _loc.unavailable;
     final amount = payment.amount % 1 == 0
         ? payment.amount.toInt().toString()
         : payment.amount.toString();
@@ -541,6 +581,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   }
 
   Widget _buildProcessCard(ContractorProcessSummary process) {
+    final loc = _loc;
     final job = process.job;
     final statusColor = getProcessStatusColor(process.status);
 
@@ -565,7 +606,11 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                     color: AppColors.bluePale,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.work_outline, size: 20, color: AppColors.blue),
+                  child: const Icon(
+                    Icons.work_outline,
+                    size: 20,
+                    color: AppColors.blue,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -573,7 +618,9 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        process.name.isEmpty ? 'Unnamed Process' : process.name,
+                        process.name.isEmpty
+                            ? loc.unnamedProcess
+                            : process.name,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -585,14 +632,18 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                 ),
                 if (_canDeleteProcess(process))
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, color: AppColors.red, size: 20),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.red,
+                      size: 20,
+                    ),
                     onPressed: () => _confirmDeleteProcess(process),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
                 const SizedBox(width: 8),
                 ProcessStatusChip(
-                  label: process.status,
+                  label: loc.statusLabel(process.status),
                   color: statusColor,
                 ),
               ],
@@ -600,23 +651,35 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
             if (job != null) ...[
               const Divider(height: 20),
               // Job images
-              JobImagesWidget(jobId: job.id, height: 150, contractorId: widget.contractorId),
+              JobImagesWidget(
+                jobId: job.id,
+                height: 150,
+                contractorId: widget.contractorId,
+              ),
               const SizedBox(height: 8),
-              _buildDetailRow(Icons.schedule, 'Start', formatJobStartTime(job.jobStartTime)),
+              _buildDetailRow(
+                Icons.schedule,
+                loc.start,
+                formatJobStartTime(job.jobStartTime),
+              ),
               const SizedBox(height: 6),
-              _buildDetailRow(Icons.timer_outlined, 'Duration', '${job.durationHours}h'),
+              _buildDetailRow(
+                Icons.timer_outlined,
+                loc.duration,
+                '${job.durationHours}h',
+              ),
               if (job.paymentInformation != null) ...[
                 const SizedBox(height: 6),
                 _buildDetailRow(
                   Icons.payments_outlined,
-                  'Payment',
+                  loc.payment,
                   _formatPayment(job.paymentInformation!),
                 ),
               ],
               const SizedBox(height: 6),
               _buildAddressRow(
                 Icons.location_on_outlined,
-                'Location',
+                loc.location,
                 job.latitude,
                 job.longitude,
               ),
@@ -625,18 +688,33 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                 const Divider(height: 12),
                 Row(
                   children: [
-                    ProfileAvatar(id: job.assignedWorkerId, isWorker: true, radius: 20),
+                    ProfileAvatar(
+                      id: job.assignedWorkerId,
+                      isWorker: true,
+                      radius: 20,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            job.assignedWorkerName.isNotEmpty ? job.assignedWorkerName : 'Assigned worker',
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            job.assignedWorkerName.isNotEmpty
+                                ? job.assignedWorkerName
+                                : loc.assignedWorker,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 4),
-                          Text('Tap to view worker details', style: const TextStyle(fontSize: 12, color: AppColors.text3)),
+                          Text(
+                            loc.tapToViewWorkerDetails,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.text3,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -665,10 +743,19 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
       children: [
         Icon(icon, size: 15, color: AppColors.text3),
         const SizedBox(width: 6),
-        Text('$label: ', style: const TextStyle(fontSize: 12, color: AppColors.text3)),
+        Text(
+          '$label: ',
+          style: const TextStyle(fontSize: 12, color: AppColors.text3),
+        ),
         Expanded(
-          child: Text(value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.text2)),
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppColors.text2,
+            ),
+          ),
         ),
       ],
     );
@@ -679,14 +766,21 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
       children: [
         Icon(icon, size: 15, color: AppColors.text3),
         const SizedBox(width: 6),
-        Text('$label: ', style: const TextStyle(fontSize: 12, color: AppColors.text3)),
+        Text(
+          '$label: ',
+          style: const TextStyle(fontSize: 12, color: AppColors.text3),
+        ),
         Expanded(
           child: FutureBuilder<String>(
             future: ApiService().reverseGeocode(lat, lng),
             builder: (context, snap) {
               return Text(
-                snap.data ?? 'Loading...',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.text2),
+                snap.data ?? _loc.loading,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.text2,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               );
@@ -696,7 +790,4 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
       ],
     );
   }
-
 }
-
-

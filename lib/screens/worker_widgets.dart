@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
+import '../providers/language_provider.dart';
 import '../theme.dart';
 
 /// Pinned tab-bar delegate for worker profile screen.
@@ -12,7 +15,11 @@ class WorkerTabBarDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => tabBar.preferredSize.height;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return Container(color: Colors.white, child: tabBar);
   }
 
@@ -27,6 +34,7 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context.watch<LanguageProvider>().locale);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
@@ -34,7 +42,7 @@ class StatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        status,
+        loc.statusLabel(status),
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -86,11 +94,15 @@ class JobStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context.watch<LanguageProvider>().locale);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: _bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Text(
-        status,
+        loc.statusLabel(status),
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _fg),
       ),
     );
@@ -131,7 +143,9 @@ class ActionButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 12),
         ),
       ),
@@ -145,6 +159,7 @@ class CompletedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context.watch<LanguageProvider>().locale);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -157,7 +172,7 @@ class CompletedBadge extends StatelessWidget {
           Icon(Icons.check_circle, size: 16, color: AppColors.green),
           const SizedBox(width: 6),
           Text(
-            'Completed',
+            loc.completed,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
