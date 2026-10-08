@@ -743,7 +743,8 @@ class ApiService {
     }
   }
 
-  /// Accept a worker job
+  /// Claim a job for a worker. The job is held for this worker until the
+  /// contractor approves or rejects the claim, or the claim expires.
   Future<void> acceptWorkerJob({
     required String workerId,
     required String jobId,
@@ -806,6 +807,61 @@ class ApiService {
         response.statusCode != 204) {
       throw _buildApiException(
         fallbackMessage: 'Failed to update worker job status',
+        response: response,
+      );
+    }
+  }
+
+  /// Approve the pending worker claim on a contractor's job.
+  /// The job becomes ACCEPTED and is assigned to the claiming worker.
+  Future<void> approveJobClaim({
+    required String contractorId,
+    required String jobId,
+    required String accountId,
+  }) async {
+    await _updateContractorJobClaim(
+      contractorId: contractorId,
+      jobId: jobId,
+      accountId: accountId,
+      action: 'approve',
+    );
+  }
+
+  /// Reject the pending worker claim on a contractor's job.
+  /// The job becomes visible to other workers again.
+  Future<void> rejectJobClaim({
+    required String contractorId,
+    required String jobId,
+    required String accountId,
+  }) async {
+    await _updateContractorJobClaim(
+      contractorId: contractorId,
+      jobId: jobId,
+      accountId: accountId,
+      action: 'reject',
+    );
+  }
+
+  Future<void> _updateContractorJobClaim({
+    required String contractorId,
+    required String jobId,
+    required String accountId,
+    required String action,
+  }) async {
+    final response = await _sendWithAuthRetry(
+      method: 'PATCH',
+      uri: Uri.parse(
+        '$_gatewayUrl$_managementPath/contractor/$contractorId/job/$jobId/$action',
+      ),
+      accountId: accountId,
+      traceId: _buildTraceId(),
+    );
+
+    if (response.statusCode != 200 &&
+        response.statusCode != 202 &&
+        response.statusCode != 204) {
+      throw _buildApiException(
+        fallbackMessage: 'Failed to $action job claim',
         response: response,
       );
     }
@@ -1050,15 +1106,18 @@ class ApiService {
   }
 
   /// Get active processes for a contractor
-  Future<List<ContractorProcessSummary>> getActiveContractorProcesses({
+  Future<ContractorActiveProcesses> getActiveContractorProcesses({
     required String contractorId,
     String? accountId,
   }) async {
-    return _fetchContractorProcesses(
+    final data = await _fetchContractorProcessesJson(
       contractorId: contractorId,
       accountId: accountId,
       path: 'active',
     );
+    return data is Map<String, dynamic>
+        ? ContractorActiveProcesses.fromJson(data)
+        : const ContractorActiveProcesses();
   }
 
   /// Get history processes for a contractor
@@ -1066,14 +1125,26 @@ class ApiService {
     required String contractorId,
     String? accountId,
   }) async {
-    return _fetchContractorProcesses(
+    final data = await _fetchContractorProcessesJson(
       contractorId: contractorId,
       accountId: accountId,
       path: 'history',
     );
+
+    List<dynamic> processList;
+    if (data is Map<String, dynamic>) {
+      processList = data['processes'] ?? [];
+    } else if (data is List<dynamic>) {
+      processList = data;
+    } else {
+      processList = [];
+    }
+
+    return parseContractorProcessList(processList);
   }
 
-  Future<List<ContractorProcessSummary>> _fetchContractorProcesses({
+  /// Decoded response body, or null when the contractor has no processes.
+  Future<dynamic> _fetchContractorProcessesJson({
     required String contractorId,
     required String path,
     String? accountId,
@@ -1089,7 +1160,7 @@ class ApiService {
       );
 
       if (response.statusCode == 404) {
-        return [];
+        return null;
       }
 
       if (response.statusCode != 200) {
@@ -1100,24 +1171,10 @@ class ApiService {
       }
 
       if (response.body.isEmpty) {
-        return [];
+        return null;
       }
 
-      final data = jsonDecode(response.body);
-
-      List<dynamic> processList;
-      if (data is Map<String, dynamic>) {
-        processList = data['processes'] ?? [];
-      } else if (data is List<dynamic>) {
-        processList = data;
-      } else {
-        processList = [];
-      }
-
-      return processList
-          .whereType<Map<String, dynamic>>()
-          .map(ContractorProcessSummary.fromJson)
-          .toList();
+      return jsonDecode(response.body);
     } catch (e) {
       print('Error fetching contractor processes ($path): $e');
       rethrow;

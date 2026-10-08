@@ -618,6 +618,95 @@ class AppLocalizations {
     return 'Failed to accept job';
   }
 
+  String get jobRequestSent {
+    if (isSinhala)
+      return 'ඉල්ලීම යවන ලදී. කොන්ත්‍රාත්කරුගේ අනුමැතිය බලාපොරොත්තුවෙන්.';
+    return 'Request sent. Waiting for contractor approval.';
+  }
+
+  String get approvedWorkersOnTheseJobs {
+    if (isSinhala) return 'අනුමත ශ්‍රමිකයින් මෙම රැකියා කරමින් සිටී';
+    return 'Approved workers are on these jobs';
+  }
+
+  String get awaitingApprovalJobs {
+    if (isSinhala) return 'අනුමැතිය බලාපොරොත්තුවෙන් ඇති රැකියා';
+    return 'Awaiting approval';
+  }
+
+  String get awaitingContractorApproval {
+    if (isSinhala) return 'කොන්ත්‍රාත්කරුගේ අනුමැතිය බලාපොරොත්තුවෙන්';
+    return 'Waiting for contractor approval';
+  }
+
+  String get worker {
+    if (isSinhala) return 'ශ්‍රමිකයා';
+    return 'Worker';
+  }
+
+  String get workerRequestedJob {
+    if (isSinhala) return 'කම්කරුවෙකු මෙම රැකියාව ඉල්ලා ඇත';
+    return 'A worker requested this job';
+  }
+
+  String get approve {
+    if (isSinhala) return 'අනුමත කරන්න';
+    return 'Approve';
+  }
+
+  String get reject {
+    if (isSinhala) return 'ප්‍රතික්ෂේප කරන්න';
+    return 'Reject';
+  }
+
+  String get jobClaimApproved {
+    if (isSinhala) return 'කම්කරු අනුමත කරන ලදී';
+    return 'Worker approved';
+  }
+
+  String get jobClaimRejected {
+    if (isSinhala) return 'ඉල්ලීම ප්‍රතික්ෂේප කරන ලදී';
+    return 'Request rejected';
+  }
+
+  String get failedToApproveJobClaim {
+    if (isSinhala) return 'අනුමත කිරීම අසාර්ථක විය';
+    return 'Failed to approve worker';
+  }
+
+  String get failedToRejectJobClaim {
+    if (isSinhala) return 'ප්‍රතික්ෂේප කිරීම අසාර්ථක විය';
+    return 'Failed to reject request';
+  }
+
+  String get rejectJobClaimTitle {
+    if (isSinhala) return 'ඉල්ලීම ප්‍රතික්ෂේප කරන්නද?';
+    return 'Reject request?';
+  }
+
+  String get rejectJobClaimMessage {
+    if (isSinhala)
+      return 'මෙම කම්කරුට නැවත මෙම රැකියාව ඉල්ලිය නොහැක. රැකියාව අනෙකුත් කම්කරුවන්ට නැවත පෙන්වනු ඇත.';
+    return 'This worker will not be able to request this job again. The job will be shown to other workers.';
+  }
+
+  String lastRequestRejected(String workerName) {
+    if (isSinhala)
+      return '$workerName ගේ ඉල්ලීම ප්‍රතික්ෂේප කරන ලදී. රැකියාව නැවත විවෘතයි.';
+    return 'Request from $workerName was rejected. Job is open again.';
+  }
+
+  String lastRequestExpired(String workerName) {
+    if (isSinhala)
+      return '$workerName ගේ ඉල්ලීම කල් ඉකුත් විය. රැකියාව නැවත විවෘතයි.';
+    return 'Request from $workerName expired. Job is open again.';
+  }
+
+  String claimRequestedAt(String time) {
+    if (isSinhala) return 'ඉල්ලූ වේලාව: $time';
+    return 'Requested: $time';
+  }
+
   String get jobStartedSuccessfully {
     if (isSinhala) return 'රැකියාව සාර්ථකව ආරම්භ කරන ලදී';
     return 'Job started successfully';
@@ -1558,6 +1647,8 @@ class AppLocalizations {
         return isSinhala ? 'සාදන ලදී' : 'CREATED';
       case 'ACCEPTED':
         return isSinhala ? 'පිළිගත්' : 'ACCEPTED';
+      case 'AWAITING_APPROVAL':
+        return isSinhala ? 'අනුමැතිය බලාපොරොත්තුවෙන්' : 'AWAITING APPROVAL';
       case 'STARTED':
         return isSinhala ? 'ආරම්භ කළ' : 'STARTED';
       case 'IN_PROGRESS':

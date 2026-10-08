@@ -1,16 +1,29 @@
 class WorkerJobSuggestionResponse {
+  /// Open jobs the worker can still claim.
   final List<WorkerJobSuggestion> availableJobs;
 
-  const WorkerJobSuggestionResponse({required this.availableJobs});
+  /// Jobs the worker has claimed that wait for contractor approval
+  /// (jobStatus AWAITING_APPROVAL). Once approved they move to assigned jobs.
+  final List<WorkerJobSuggestion> awaitingApprovalJobs;
+
+  const WorkerJobSuggestionResponse({
+    required this.availableJobs,
+    this.awaitingApprovalJobs = const [],
+  });
 
   factory WorkerJobSuggestionResponse.fromJson(Map<String, dynamic> json) {
-    final jobs = (json['availableJobs'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map(WorkerJobSuggestion.fromJson)
-        .toList();
-
-    return WorkerJobSuggestionResponse(availableJobs: jobs);
+    return WorkerJobSuggestionResponse(
+      availableJobs: _parseSuggestions(json['availableJobs']),
+      awaitingApprovalJobs: _parseSuggestions(json['awaitingApprovalJobs']),
+    );
   }
+}
+
+List<WorkerJobSuggestion> _parseSuggestions(dynamic value) {
+  return (value as List<dynamic>? ?? [])
+      .whereType<Map<String, dynamic>>()
+      .map(WorkerJobSuggestion.fromJson)
+      .toList();
 }
 
 class WorkerJobSuggestion {
@@ -49,6 +62,9 @@ class SuggestedJobInformation {
   final String processId;
   final String processDescription;
   final double jobPaymentAmount;
+
+  /// AWAITING_APPROVAL while this worker's claim waits for the contractor.
+  bool get isAwaitingApproval => jobStatus.toUpperCase() == 'AWAITING_APPROVAL';
 
   const SuggestedJobInformation({
     required this.jobId,

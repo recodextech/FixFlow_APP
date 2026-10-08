@@ -48,6 +48,8 @@ Color getProcessStatusColor(String status) {
     case 'CREATED':
     case 'PENDING':
       return AppColors.orange;
+    case 'AWAITING_APPROVAL':
+      return const Color(0xFF6A1B9A);
     case 'IN_PROGRESS':
       return AppColors.blue;
     case 'COMPLETED':

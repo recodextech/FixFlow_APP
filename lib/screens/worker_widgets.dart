@@ -64,6 +64,8 @@ class JobStatusChip extends StatelessWidget {
         return AppColors.orangePale;
       case 'ACCEPTED':
         return AppColors.bluePale;
+      case 'AWAITING_APPROVAL':
+        return const Color(0xFFF3E5F5);
       case 'STARTED':
       case 'IN_PROGRESS':
         return const Color(0xFFE8EAF6);
@@ -81,6 +83,8 @@ class JobStatusChip extends StatelessWidget {
         return AppColors.orange;
       case 'ACCEPTED':
         return AppColors.blue;
+      case 'AWAITING_APPROVAL':
+        return const Color(0xFF6A1B9A);
       case 'STARTED':
       case 'IN_PROGRESS':
         return const Color(0xFF283593);
@@ -177,6 +181,45 @@ class CompletedBadge extends StatelessWidget {
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: AppColors.green,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown on a job the worker has requested while the contractor has not yet approved it.
+class AwaitingApprovalBadge extends StatelessWidget {
+  const AwaitingApprovalBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context.watch<LanguageProvider>().locale);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3E5F5),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.hourglass_top_rounded,
+            size: 16,
+            color: Color(0xFF6A1B9A),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              loc.awaitingContractorApproval,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF6A1B9A),
+              ),
             ),
           ),
         ],

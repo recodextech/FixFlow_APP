@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/contractor.dart';
 import '../models/process.dart';
+import '../models/worker.dart';
 import '../providers/contractor_provider.dart';
 import '../providers/language_provider.dart';
 import '../services/preferences_service.dart';
@@ -28,9 +30,12 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late Future<Contractor?> _contractorFuture;
-  late Future<List<ContractorProcessSummary>> _activeProcessesFuture;
+  late Future<ContractorActiveProcesses> _activeProcessesFuture;
   Future<List<ContractorProcessSummary>>? _historyProcessesFuture;
-  bool _historyLoaded = false;
+  int _lastFetchedTabIndex = 0;
+  bool _isActiveProcessesExpanded = false;
+  final Set<String> _claimActionInProgress = {};
+  final Map<String, Future<Worker?>> _claimWorkerFutures = {};
 
   @override
   void initState() {
@@ -53,15 +58,21 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   }
 
   void _onTabChanged() {
-    if (_tabController.index == 1 && !_historyLoaded) {
-      setState(() {
-        _historyLoaded = true;
+    // The listener fires more than once per switch (tap start + animation end),
+    // so only refetch when the settled index actually differs.
+    final index = _tabController.index;
+    if (index == _lastFetchedTabIndex) return;
+    _lastFetchedTabIndex = index;
+    setState(() {
+      if (index == 0) {
+        _activeProcessesFuture = _loadActiveProcesses();
+      } else {
         _historyProcessesFuture = _loadHistoryProcesses();
-      });
-    }
+      }
+    });
   }
 
-  Future<List<ContractorProcessSummary>> _loadActiveProcesses() {
+  Future<ContractorActiveProcesses> _loadActiveProcesses() {
     final accountId = PreferencesService().getAccountId();
     return ApiService().getActiveContractorProcesses(
       contractorId: widget.contractorId,
@@ -183,6 +194,108 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     }
   }
 
+  Future<void> _approveJobClaim(String jobId) async {
+    await _runJobClaimAction(
+      jobId: jobId,
+      action: (accountId) => ApiService().approveJobClaim(
+        contractorId: widget.contractorId,
+        jobId: jobId,
+        accountId: accountId,
+      ),
+      successMessage: _loc.jobClaimApproved,
+      failureMessage: _loc.failedToApproveJobClaim,
+    );
+  }
+
+  Future<void> _confirmRejectJobClaim(String jobId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_loc.rejectJobClaimTitle),
+        content: Text(_loc.rejectJobClaimMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(_loc.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            child: Text(_loc.reject),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await _runJobClaimAction(
+      jobId: jobId,
+      action: (accountId) => ApiService().rejectJobClaim(
+        contractorId: widget.contractorId,
+        jobId: jobId,
+        accountId: accountId,
+      ),
+      successMessage: _loc.jobClaimRejected,
+      failureMessage: _loc.failedToRejectJobClaim,
+    );
+  }
+
+  Future<void> _runJobClaimAction({
+    required String jobId,
+    required Future<void> Function(String accountId) action,
+    required String successMessage,
+    required String failureMessage,
+  }) async {
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_loc.accountIdMissing)));
+      return;
+    }
+
+    setState(() => _claimActionInProgress.add(jobId));
+
+    try {
+      await action(accountId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(successMessage)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$failureMessage: $e')));
+    } finally {
+      // Reload either way: on failure the claim may have expired or been
+      // handled elsewhere, so show the current state.
+      if (mounted) {
+        setState(() {
+          _claimActionInProgress.remove(jobId);
+          _activeProcessesFuture = _loadActiveProcesses();
+        });
+      }
+    }
+  }
+
+  Future<Worker?> _loadClaimWorker(String workerId) {
+    return _claimWorkerFutures.putIfAbsent(
+      workerId,
+      () => ApiService()
+          .getWorker(workerId, accountId: PreferencesService().getAccountId())
+          .catchError((_) => null),
+    );
+  }
+
+  /// Formats a UTC claim timestamp (RFC 3339) in the device's local time.
+  String _formatClaimTime(String rawTime) {
+    final parsed = DateTime.tryParse(rawTime);
+    if (parsed == null) return rawTime;
+    return formatJobStartTime(parsed.toLocal().toIso8601String());
+  }
+
   bool _canDeleteProcess(ContractorProcessSummary process) {
     // Process can be deleted only if it's not assigned or accepted.
     // "Not assigned" means assignedWorkerId is empty.
@@ -279,15 +392,11 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
 
           final contractor = snapshot.data!;
 
-          return FutureBuilder<List<ContractorProcessSummary>>(
+          return FutureBuilder<ContractorActiveProcesses>(
             future: _activeProcessesFuture,
             builder: (context, activeSnapshot) {
-              final activeProcesses = (activeSnapshot.data ?? [])
-                ..sort((a, b) {
-                  final startA = a.job?.jobStartTime ?? '';
-                  final startB = b.job?.jobStartTime ?? '';
-                  return startB.compareTo(startA);
-                });
+              final openProcesses =
+                  activeSnapshot.data ?? const ContractorActiveProcesses();
 
               return NestedScrollView(
                 headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -310,7 +419,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(loc.pending),
-                                  if (activeProcesses.isNotEmpty) ...[
+                                  if (!openProcesses.isEmpty) ...[
                                     const SizedBox(width: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
@@ -322,7 +431,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
-                                        '${activeProcesses.length}',
+                                        '${openProcesses.total}',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 10,
@@ -369,11 +478,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                               ],
                             ),
                           )
-                        : _buildProcessList(
-                            activeProcesses,
-                            loc.noPendingProcesses,
-                            loc.newProcessesWillAppearHere,
-                          ),
+                        : _buildOpenProcessesTab(openProcesses, loc),
                     FutureBuilder<List<ContractorProcessSummary>>(
                       future: _historyProcessesFuture,
                       builder: (context, historySnapshot) {
@@ -522,6 +627,161 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     );
   }
 
+  int _compareByStartDesc(
+    ContractorProcessSummary a,
+    ContractorProcessSummary b,
+  ) {
+    final startA = a.job?.jobStartTime ?? '';
+    final startB = b.job?.jobStartTime ?? '';
+    return startB.compareTo(startA);
+  }
+
+  /// Approved processes sit in a foldable card on top; pending ones below,
+  /// with claims waiting for the contractor's approval first.
+  Widget _buildOpenProcessesTab(
+    ContractorActiveProcesses openProcesses,
+    AppLocalizations loc,
+  ) {
+    if (openProcesses.isEmpty) {
+      return _buildProcessList(
+        const [],
+        loc.noPendingProcesses,
+        loc.newProcessesWillAppearHere,
+      );
+    }
+
+    final active = [...openProcesses.activeProcesses]
+      ..sort(_compareByStartDesc);
+    final pending = [...openProcesses.pendingProcesses]
+      ..sort((a, b) {
+        final awaitingA = a.job?.isAwaitingApproval == true;
+        final awaitingB = b.job?.isAwaitingApproval == true;
+        if (awaitingA != awaitingB) return awaitingA ? -1 : 1;
+        return _compareByStartDesc(a, b);
+      });
+
+    final hasActiveSection = active.isNotEmpty;
+    final offset = hasActiveSection ? 1 : 0;
+    return RefreshIndicator(
+      onRefresh: () async => setState(() {
+        _activeProcessesFuture = _loadActiveProcesses();
+      }),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: offset + (pending.isEmpty ? 1 : pending.length),
+        itemBuilder: (context, index) {
+          if (hasActiveSection && index == 0) {
+            return _buildActiveProcessesSection(active, loc);
+          }
+          if (pending.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  loc.noPendingProcesses,
+                  style: const TextStyle(color: AppColors.text2),
+                ),
+              ),
+            );
+          }
+          return _buildProcessCard(pending[index - offset]);
+        },
+      ),
+    );
+  }
+
+  Widget _buildActiveProcessesSection(
+    List<ContractorProcessSummary> processes,
+    AppLocalizations loc,
+  ) {
+    const accent = AppColors.blue;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: () => setState(
+              () => _isActiveProcessesExpanded = !_isActiveProcessesExpanded,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.engineering_outlined, color: accent),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          loc.activeProcesses,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: accent,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          loc.approvedWorkersOnTheseJobs,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.text2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${processes.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    _isActiveProcessesExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: accent,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_isActiveProcessesExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+              child: Column(
+                children: [
+                  for (final process in processes) _buildProcessCard(process),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProcessList(
     List<ContractorProcessSummary> processes,
     String emptyTitle,
@@ -643,8 +903,14 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                   ),
                 const SizedBox(width: 8),
                 ProcessStatusChip(
-                  label: loc.statusLabel(process.status),
-                  color: statusColor,
+                  label: loc.statusLabel(
+                    job?.isAwaitingApproval == true
+                        ? 'AWAITING_APPROVAL'
+                        : process.status,
+                  ),
+                  color: job?.isAwaitingApproval == true
+                      ? getProcessStatusColor('AWAITING_APPROVAL')
+                      : statusColor,
                 ),
               ],
             ),
@@ -684,6 +950,10 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                 job.longitude,
               ),
               const SizedBox(height: 8),
+              if (job.isAwaitingApproval)
+                _buildPendingClaimSection(job.id, job.claim!, loc)
+              else if (job.hasClaim)
+                _buildClosedClaimNote(job.approvalStatus, job.claim!, loc),
               if (job.assignedWorkerId.isNotEmpty) ...[
                 const Divider(height: 12),
                 Row(
@@ -707,6 +977,28 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                          if (job.assignedWorkerPhone.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            InkWell(
+                              onTap: () =>
+                                  _makePhoneCall(job.assignedWorkerPhone),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.phone_outlined,
+                                    size: 14,
+                                    color: AppColors.text3,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    job.assignedWorkerPhone,
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           Text(
                             loc.tapToViewWorkerDetails,
@@ -734,6 +1026,184 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (cleanPhone.isEmpty) return;
+
+    final Uri launchUri = Uri(scheme: 'tel', path: cleanPhone);
+    try {
+      if (await canLaunchUrl(launchUri)) {
+        await launchUrl(launchUri);
+      }
+    } catch (e) {
+      debugPrint('Could not launch phone call: $e');
+    }
+  }
+
+  Widget _buildPendingClaimSection(
+    String jobId,
+    JobClaim claim,
+    AppLocalizations loc,
+  ) {
+    final isInProgress = _claimActionInProgress.contains(jobId);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.orangePale,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            loc.workerRequestedJob,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.orange,
+            ),
+          ),
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: () =>
+                Navigator.pushNamed(context, '/worker/${claim.workerId}'),
+            child: Row(
+              children: [
+                ProfileAvatar(id: claim.workerId, isWorker: true, radius: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FutureBuilder<Worker?>(
+                    // The name normally comes with the process list; fetch the
+                    // worker only when it is missing.
+                    future: claim.workerName.trim().isNotEmpty
+                        ? null
+                        : _loadClaimWorker(claim.workerId),
+                    builder: (context, snap) {
+                      final name = claim.workerName.trim().isNotEmpty
+                          ? claim.workerName.trim()
+                          : snap.data?.workerName.trim() ?? '';
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name.isNotEmpty ? name : loc.tapToViewWorkerDetails,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (claim.requestedAt.isNotEmpty)
+                            Text(
+                              loc.claimRequestedAt(
+                                _formatClaimTime(claim.requestedAt),
+                              ),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.text3,
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 14,
+                  color: AppColors.text3,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (isInProgress)
+            const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _confirmRejectJobClaim(jobId),
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    label: Text(loc.reject),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.red,
+                      side: const BorderSide(color: AppColors.red),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _approveJobClaim(jobId),
+                    icon: const Icon(Icons.check_rounded, size: 18),
+                    label: Text(loc.approve),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.green,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Notes the last request on a job that is open again, after the
+  /// contractor rejected it or it expired.
+  Widget _buildClosedClaimNote(
+    String approvalStatus,
+    JobClaim claim,
+    AppLocalizations loc,
+  ) {
+    final status = approvalStatus.toUpperCase();
+    if (status != 'REJECTED' && status != 'EXPIRED') {
+      return const SizedBox.shrink();
+    }
+
+    final name = claim.workerName.trim().isNotEmpty
+        ? claim.workerName.trim()
+        : loc.worker;
+    final message = status == 'REJECTED'
+        ? loc.lastRequestRejected(name)
+        : loc.lastRequestExpired(name);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Icon(
+            status == 'REJECTED'
+                ? Icons.block_rounded
+                : Icons.timer_off_outlined,
+            size: 15,
+            color: AppColors.text3,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 12, color: AppColors.text3),
+            ),
+          ),
+        ],
       ),
     );
   }

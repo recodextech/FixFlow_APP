@@ -46,6 +46,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   bool _hasAvailability = false;
   bool _hasPromptedAvailabilityCreation = false;
   bool _isAvailabilityScreenOpen = false;
+  bool _isAwaitingApprovalExpanded = false;
   List<WorkerAvailability> _availabilities = [];
   final Map<String, Contractor?> _contractorCache = {};
   final Set<String> _loadingContractorIds = {};
@@ -59,6 +60,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       if (_tabController.indexIsChanging) {
         switch (_tabController.index) {
           case 0:
+            // Awaiting approval starts folded each time the suggestions tab opens
+            _isAwaitingApprovalExpanded = false;
             _refreshJobSuggestions();
             break;
           case 1:
@@ -451,10 +454,20 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   }
 
   Future<WorkerJobSuggestionResponse> _loadJobSuggestions() {
-    return context.read<WorkerProvider>().getWorkerJobSuggestions(
-      workerId: widget.workerId,
-      accountId: PreferencesService().getAccountId(),
-    );
+    return context
+        .read<WorkerProvider>()
+        .getWorkerJobSuggestions(
+          workerId: widget.workerId,
+          accountId: PreferencesService().getAccountId(),
+        )
+        .then((response) {
+          // The server reports the claim state (awaitingApprovalJobs) from here on:
+          // still pending, or gone after the contractor rejected it or it expired.
+          _jobStatusOverrides.removeWhere(
+            (_, status) => status == 'AWAITING_APPROVAL',
+          );
+          return response;
+        });
   }
 
   Future<List<WorkerAssignedJob>> _loadPendingJobs() {
@@ -562,18 +575,16 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         return;
       }
 
+      // The job is only claimed: it stays in suggestions until the contractor
+      // approves it, then moves to the assigned jobs tab.
       setState(() {
-        _jobStatusOverrides[jobId] = 'ACCEPTED';
-        _pendingJobsFuture = _loadPendingJobs();
+        _jobStatusOverrides[jobId] = 'AWAITING_APPROVAL';
         _jobSuggestionsFuture = _loadJobSuggestions();
-        _tabController.animateTo(1);
       });
-
-      _loadContractorContactIfNeeded(suggestion.jobInformation.contractorId);
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(loc.jobAcceptedSuccessfully)));
+      ).showSnackBar(SnackBar(content: Text(loc.jobRequestSent)));
     } catch (e) {
       if (!mounted) {
         return;
@@ -1411,8 +1422,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           );
         }
 
+        final awaitingApproval = snapshot.data?.awaitingApprovalJobs ?? [];
         final suggestions = snapshot.data?.availableJobs ?? [];
-        if (suggestions.isEmpty) {
+        if (awaitingApproval.isEmpty && suggestions.isEmpty) {
           return _buildEmptyState(
             loc.noSuggestedJobs,
             loc.jobSuggestionsDescription,
@@ -1420,13 +1432,31 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           );
         }
 
+        // Claims awaiting approval sit in a foldable card on top, open suggestions below
+        final hasAwaitingSection = awaitingApproval.isNotEmpty;
+        final offset = hasAwaitingSection ? 1 : 0;
         return RefreshIndicator(
           onRefresh: () async => _refreshJobSuggestions(),
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: suggestions.length,
-            itemBuilder: (context, index) =>
-                _buildSuggestedJobCard(suggestions[index], loc),
+            itemCount: offset + (suggestions.isEmpty ? 1 : suggestions.length),
+            itemBuilder: (context, index) {
+              if (hasAwaitingSection && index == 0) {
+                return _buildAwaitingApprovalSection(awaitingApproval, loc);
+              }
+              if (suggestions.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      loc.noSuggestedJobs,
+                      style: const TextStyle(color: AppColors.text2),
+                    ),
+                  ),
+                );
+              }
+              return _buildSuggestedJobCard(suggestions[index - offset], loc);
+            },
           ),
         );
       },
@@ -1874,13 +1904,110 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
-  Widget _buildSuggestedJobCard(
-    WorkerJobSuggestion suggestion,
+  Widget _buildAwaitingApprovalSection(
+    List<WorkerJobSuggestion> jobs,
     AppLocalizations loc,
   ) {
+    const accent = Color(0xFF6A1B9A);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3E5F5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE1BEE7)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: () => setState(
+              () => _isAwaitingApprovalExpanded = !_isAwaitingApprovalExpanded,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.hourglass_top_rounded, color: accent),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          loc.awaitingApprovalJobs,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: accent,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          loc.awaitingContractorApproval,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.text2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${jobs.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    _isAwaitingApprovalExpanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    color: accent,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_isAwaitingApprovalExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+              child: Column(
+                children: [
+                  for (final job in jobs)
+                    _buildSuggestedJobCard(job, loc, awaitingApproval: true),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestedJobCard(
+    WorkerJobSuggestion suggestion,
+    AppLocalizations loc, {
+    bool awaitingApproval = false,
+  }) {
     final job = suggestion.jobInformation;
     final workerInfo = suggestion.workerInformation;
-    final status = _resolveSuggestionStatus(suggestion);
+    // Jobs from awaitingApprovalJobs are already claimed: never offer actions, whatever jobStatus says
+    final status = awaitingApproval
+        ? 'AWAITING_APPROVAL'
+        : _resolveSuggestionStatus(suggestion);
     final showContractorAndDirection = _showContractorAndDirection(status);
 
     if (showContractorAndDirection) {
@@ -1980,8 +2107,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               distanceText: '${distanceKm.toStringAsFixed(1)} km',
               loc: loc,
             ),
-            const SizedBox(height: 8),
-            _buildPaymentHighlight(job.jobPaymentAmount),
+            // Payment is only revealed once the job has been accepted.
+            if (showContractorAndDirection) ...[
+              const SizedBox(height: 8),
+              _buildPaymentHighlight(job.jobPaymentAmount),
+            ],
             const SizedBox(height: 12),
             JobImagesWidget(
               jobId: job.jobId,
@@ -2045,6 +2175,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
     if (isCompleted) {
       return CompletedBadge();
+    }
+
+    if (status == 'AWAITING_APPROVAL') {
+      return const AwaitingApprovalBadge();
     }
 
     return Row(
@@ -2725,6 +2859,10 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
     if (overridden != null && overridden.isNotEmpty) {
       return overridden;
+    }
+
+    if (suggestion.jobInformation.isAwaitingApproval) {
+      return 'AWAITING_APPROVAL';
     }
 
     final serverStatus = suggestion.jobInformation.jobStatus.trim();
