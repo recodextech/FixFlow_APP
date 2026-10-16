@@ -13,14 +13,13 @@ import 'services/preferences_service.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'widgets/app_toast.dart';
 import 'l10n/app_localizations.dart';
-
-final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  await NotificationService.initialize(scaffoldMessengerKey);
+  await NotificationService.initialize();
   await PreferencesService().init();
   runApp(const MyApp());
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -44,7 +43,7 @@ class MyApp extends StatelessWidget {
         builder: (context, languageProvider, _) {
           return MaterialApp(
             title: 'FixFlow',
-            scaffoldMessengerKey: scaffoldMessengerKey,
+            navigatorKey: AppToast.navigatorKey,
             theme: buildAppTheme(languageProvider.locale),
             locale: languageProvider.locale,
             localizationsDelegates: const [

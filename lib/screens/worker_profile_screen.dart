@@ -7,10 +7,12 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/availability.dart';
 import '../models/contractor.dart';
 import '../models/worker.dart';
+import '../models/worker_rating.dart';
 import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
 import '../widgets/job_images_widget.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/star_rating.dart';
 import '../providers/worker_provider.dart';
 import '../providers/language_provider.dart';
 import '../services/api_service.dart';
@@ -20,6 +22,7 @@ import '../l10n/app_localizations.dart';
 import 'create_worker_availability_screen.dart';
 import 'worker_details_screen.dart';
 import 'worker_widgets.dart';
+import '../widgets/app_toast.dart';
 
 class WorkerProfileScreen extends StatefulWidget {
   final String workerId;
@@ -37,6 +40,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   late TabController _tabController;
 
   late Future<Worker?> _workerFuture;
+  late Future<WorkerRating?> _workerRatingFuture;
   late Future<List<WorkerAssignedJob>> _pendingJobsFuture;
   late Future<List<WorkerAssignedJob>> _historyJobsFuture;
   late Future<WorkerJobSuggestionResponse> _jobSuggestionsFuture;
@@ -99,6 +103,14 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       widget.workerId,
       accountId: PreferencesService().getAccountId(),
     );
+    // The rating is only an indicator: hide it rather than fail the screen.
+    _workerRatingFuture = ApiService()
+        .getWorkerRating(
+          widget.workerId,
+          accountId: PreferencesService().getAccountId(),
+        )
+        .then<WorkerRating?>((rating) => rating)
+        .catchError((_) => null);
 
     // First fetch only suggested jobs endpoint
     _jobSuggestionsFuture = _loadJobSuggestions();
@@ -174,16 +186,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.availabilityWindowDeleted)));
+      AppToast.success(loc.availabilityWindowDeleted);
 
       await _loadAvailabilities();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${loc.failedToDeleteAvailability}: $e')),
-      );
+      AppToast.fromError(e, loc: loc, fallback: loc.failedToDeleteAvailability);
     }
   }
 
@@ -385,14 +393,8 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                             if (confirmed == true) {
                                               if (avail.id.isEmpty) {
                                                 if (!context.mounted) return;
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      loc.availabilityIdMissing,
-                                                    ),
-                                                  ),
+                                                AppToast.error(
+                                                  loc.availabilityIdMissing,
                                                 );
                                                 return;
                                               }
@@ -534,16 +536,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final jobId = suggestion.jobInformation.jobId;
 
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.accountIdMissing)));
+      AppToast.error(loc.accountIdMissing);
       return;
     }
 
     if (jobId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.invalidJobId)));
+      AppToast.error(loc.invalidJobId);
       return;
     }
 
@@ -553,9 +551,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     }
 
     if (!canAccept) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.addAvailabilityFirst)));
+      AppToast.warning(loc.addAvailabilityFirst);
       await _openAddAvailability(loc);
       return;
     }
@@ -582,17 +578,17 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         _jobSuggestionsFuture = _loadJobSuggestions();
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.jobRequestSent)));
+      AppToast.success(loc.jobRequestSent);
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${loc.failedToAcceptJob}: $e')));
+      AppToast.fromError(e, loc: loc, fallback: loc.failedToAcceptJob);
+      if (e is ApiException && e.isConflict) {
+        // the job changed (taken by another worker, not approved yet...): show its current state
+        setState(() => _jobSuggestionsFuture = _loadJobSuggestions());
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -610,16 +606,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final jobId = suggestion.jobInformation.jobId;
 
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.accountIdMissing)));
+      AppToast.error(loc.accountIdMissing);
       return;
     }
 
     if (jobId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.invalidJobId)));
+      AppToast.error(loc.invalidJobId);
       return;
     }
 
@@ -643,17 +635,17 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         _pendingJobsFuture = _loadPendingJobs();
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.jobStartedSuccessfully)));
+      AppToast.success(loc.jobStartedSuccessfully);
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${loc.failedToStartJob}: $e')));
+      AppToast.fromError(e, loc: loc, fallback: loc.failedToStartJob);
+      if (e is ApiException && e.isConflict) {
+        // the job changed (taken by another worker, not approved yet...): show its current state
+        setState(() => _pendingJobsFuture = _loadPendingJobs());
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -671,16 +663,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final jobId = suggestion.jobInformation.jobId;
 
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.accountIdMissing)));
+      AppToast.error(loc.accountIdMissing);
       return;
     }
 
     if (jobId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.invalidJobId)));
+      AppToast.error(loc.invalidJobId);
       return;
     }
 
@@ -704,17 +692,17 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         _pendingJobsFuture = _loadPendingJobs();
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.jobCompletedSuccessfully)));
+      AppToast.success(loc.jobCompletedSuccessfully);
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${loc.failedToCompleteJob}: $e')));
+      AppToast.fromError(e, loc: loc, fallback: loc.failedToCompleteJob);
+      if (e is ApiException && e.isConflict) {
+        // the job changed (taken by another worker, not approved yet...): show its current state
+        setState(() => _pendingJobsFuture = _loadPendingJobs());
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -732,16 +720,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final jobId = job.jobId;
 
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.accountIdMissing)));
+      AppToast.error(loc.accountIdMissing);
       return;
     }
 
     if (jobId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.invalidJobId)));
+      AppToast.error(loc.invalidJobId);
       return;
     }
 
@@ -765,17 +749,17 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         _pendingJobsFuture = _loadPendingJobs();
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.jobStartedSuccessfully)));
+      AppToast.success(loc.jobStartedSuccessfully);
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${loc.failedToStartJob}: $e')));
+      AppToast.fromError(e, loc: loc, fallback: loc.failedToStartJob);
+      if (e is ApiException && e.isConflict) {
+        // the job changed (taken by another worker, not approved yet...): show its current state
+        setState(() => _pendingJobsFuture = _loadPendingJobs());
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -793,16 +777,12 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final jobId = job.jobId;
 
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.accountIdMissing)));
+      AppToast.error(loc.accountIdMissing);
       return;
     }
 
     if (jobId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.invalidJobId)));
+      AppToast.error(loc.invalidJobId);
       return;
     }
 
@@ -826,17 +806,17 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         _pendingJobsFuture = _loadPendingJobs();
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.jobCompletedSuccessfully)));
+      AppToast.success(loc.jobCompletedSuccessfully);
     } catch (e) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${loc.failedToCompleteJob}: $e')));
+      AppToast.fromError(e, loc: loc, fallback: loc.failedToCompleteJob);
+      if (e is ApiException && e.isConflict) {
+        // the job changed (taken by another worker, not approved yet...): show its current state
+        setState(() => _pendingJobsFuture = _loadPendingJobs());
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -917,12 +897,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     }
 
     if (_totalAvailabilityWindows >= 3) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(loc.maximumAvailabilityReached),
-          backgroundColor: AppColors.orange,
-        ),
-      );
+      AppToast.warning(loc.maximumAvailabilityReached);
       return;
     }
 
@@ -1175,7 +1150,13 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               // Profile info
               Row(
                 children: [
-                  ProfileAvatar(id: worker.id, isWorker: true, radius: 35),
+                  Column(
+                    children: [
+                      ProfileAvatar(id: worker.id, isWorker: true, radius: 35),
+                      const SizedBox(height: 6),
+                      _buildWorkerRatingIndicator(loc),
+                    ],
+                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
@@ -1496,6 +1477,43 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
             itemCount: pendingJobs.length,
             itemBuilder: (context, index) =>
                 _buildPendingJobCard(pendingJobs[index], loc),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Compact rating pill under the avatar: ★ 4.3 (12), or "No ratings yet".
+  Widget _buildWorkerRatingIndicator(AppLocalizations loc) {
+    return FutureBuilder<WorkerRating?>(
+      future: _workerRatingFuture,
+      builder: (context, snapshot) {
+        final rating = snapshot.data;
+        if (rating == null) return const SizedBox.shrink();
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.star_rounded, size: 14, color: starColor),
+              const SizedBox(width: 3),
+              Text(
+                rating.hasRatings
+                    ? '${rating.rating.toStringAsFixed(1)} (${rating.ratingCount})'
+                    : loc.noRatingsYet,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -2119,22 +2137,25 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               contractorId: job.contractorId,
             ),
             const SizedBox(height: 8),
-            // Secondary info: Contractor & Phone
+            // Secondary info: Contractor & Phone. The phone and location are
+            // only revealed once the contractor approves the job.
             _buildContractorContactSection(
               contractorName: job.contractorCompany,
               phone: isContractorLoading ? loc.loading : phone,
               canCall: canCall,
               isContractorLoading: isContractorLoading,
-              loc: loc,
-            ),
-            const SizedBox(height: 8),
-            // Open Route + Location Details (Exclamation/Info)
-            _buildRouteAndLocationActions(
-              latitude: job.jobLatitude,
-              longitude: job.jobLongitude,
+              showPhone: showContractorAndDirection,
               loc: loc,
             ),
             if (showContractorAndDirection) ...[
+              const SizedBox(height: 8),
+              // Open Route + Location Details (Exclamation/Info)
+              _buildRouteAndLocationActions(
+                latitude: job.jobLatitude,
+                longitude: job.jobLongitude,
+                loc: loc,
+              ),
+
               const SizedBox(height: 10),
               SizedBox(
                 height: 150,
@@ -2427,6 +2448,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     required bool canCall,
     required bool isContractorLoading,
     required AppLocalizations loc,
+    bool showPhone = true,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -2451,7 +2473,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (canCall)
+          if (!showPhone)
+            const SizedBox.shrink()
+          else if (canCall)
             InkWell(
               onTap: () => _makePhoneCall(phone),
               borderRadius: BorderRadius.circular(20),
@@ -2732,9 +2756,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         longitude < -180 ||
         longitude > 180) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.invalidLocation)));
+      AppToast.error(loc.invalidLocation);
       return;
     }
 
@@ -2751,15 +2773,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       );
 
       if (!launched && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(loc.couldNotOpenMaps)));
+        AppToast.error(loc.couldNotOpenMaps);
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.couldNotOpenRoute)));
+      AppToast.error(loc.couldNotOpenRoute);
       debugPrint('Could not open Google Maps route: $e');
     }
   }

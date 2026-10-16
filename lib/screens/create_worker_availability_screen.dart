@@ -13,6 +13,7 @@ import '../providers/language_provider.dart';
 import '../providers/worker_provider.dart';
 import '../services/preferences_service.dart';
 import 'location_picker_screen.dart';
+import '../widgets/app_toast.dart';
 
 class CreateWorkerAvailabilityScreen extends StatefulWidget {
   final String workerId;
@@ -277,17 +278,13 @@ class _CreateWorkerAvailabilityScreenState
 
     final validationError = _validateForm(loc);
     if (validationError != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(validationError)));
+      AppToast.warning(validationError);
       return;
     }
 
     final accountId = PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(loc.accountIdMissing)));
+      AppToast.error(loc.accountIdMissing);
       return;
     }
 
@@ -322,16 +319,12 @@ class _CreateWorkerAvailabilityScreenState
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(loc.availabilityCreatedSuccessfully)),
-      );
+      AppToast.success(loc.availabilityCreatedSuccessfully);
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${loc.failedToCreateAvailability}: $e')),
-      );
+      AppToast.fromError(e, loc: loc, fallback: loc.failedToCreateAvailability);
     } finally {
       if (mounted) {
         setState(() {

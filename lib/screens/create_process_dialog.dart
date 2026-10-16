@@ -15,6 +15,7 @@ import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
 import '../theme.dart';
 import 'location_picker_screen.dart';
+import '../widgets/app_toast.dart';
 
 class CreateProcessDialog extends StatefulWidget {
   final String contractorId;
@@ -136,9 +137,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   void _showCategoryDescription(Category category) {
     final description = category.description.trim();
     if (description.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_loc.noDescriptionAvailableForThisCategory)),
-      );
+      AppToast.warning(_loc.noDescriptionAvailableForThisCategory);
       return;
     }
 
@@ -345,16 +344,12 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.pleaseSelectOneCategory)));
+      AppToast.warning(_loc.pleaseSelectOneCategory);
       return;
     }
 
     if (_selectedWalletId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.pleaseSelectWallet)));
+      AppToast.warning(_loc.pleaseSelectWallet);
       return;
     }
 
@@ -391,9 +386,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${_loc.error}: $e')));
+      AppToast.fromError(e, loc: _loc, fallback: _loc.error);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -666,12 +659,8 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   Future<void> _showJobPhotoSourceSheet() async {
     if (_jobPhotoBytes.length >= JobPhotoUpload.maxPhotosPerJob) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _loc.canAttachAtMostPhotos(JobPhotoUpload.maxPhotosPerJob),
-          ),
-        ),
+      AppToast.warning(
+        _loc.canAttachAtMostPhotos(JobPhotoUpload.maxPhotosPerJob),
       );
       return;
     }
@@ -716,9 +705,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
       setState(() => _jobPhotoBytes.add(bytes));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.couldNotAddPhoto('$e'))));
+      AppToast.error(_loc.couldNotAddPhoto('$e'));
     } finally {
       if (mounted) setState(() => _isAddingJobPhoto = false);
     }

@@ -10,6 +10,7 @@ import '../providers/language_provider.dart';
 import '../l10n/app_localizations.dart';
 import 'create_user_screen.dart';
 import 'home_screen.dart';
+import '../widgets/app_toast.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -62,9 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _hasAcceptedAgreement = accepted);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.couldNotSaveAgreement)));
+      AppToast.error(_loc.couldNotSaveAgreement);
     }
   }
 
@@ -174,6 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await NotificationService.registerDeviceForActiveAccount();
 
           if (!mounted) return;
+          AppToast.success(_loc.signedInSuccessfully);
           final nextScreen = accounts.hasAnyProfile
               ? const HomeScreen()
               : const CreateUserScreen();
@@ -187,21 +187,15 @@ class _LoginScreenState extends State<LoginScreen> {
           await AuthService().logout();
           await PreferencesService().clearAll();
           if (!mounted) return;
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(_loc.failedToLoadAccount)));
+          AppToast.error(_loc.failedToLoadAccount);
           return;
         }
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(_loc.signInFailed)));
+        AppToast.error(_loc.signInFailed);
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${_loc.signInError}: $e')));
+      AppToast.fromError(e, loc: _loc, fallback: _loc.signInError);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

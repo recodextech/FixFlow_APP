@@ -14,6 +14,8 @@ import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
 import '../utils/performance_utils.dart';
+import '../widgets/app_toast.dart';
+import '../widgets/wallet_card.dart';
 
 class Debouncer {
   final Duration delay;
@@ -176,12 +178,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
       _currentContractor = updated;
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_loc.profilePhotoUpdated),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+      AppToast.success(_loc.profilePhotoUpdated);
     } catch (e) {
       if (!mounted) return;
       _showTopError(_errorMessage(e));
@@ -258,12 +255,7 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_loc.profileUpdated),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+      AppToast.success(_loc.profileUpdated);
     } catch (e) {
       if (!mounted) return;
       _showTopError(_errorMessage(e));
@@ -729,74 +721,12 @@ class _ContractorInfoScreenState extends State<ContractorInfoScreen> {
   }
 
   Widget _buildWalletTile(Wallet wallet, AppLocalizations loc) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.gray2, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: wallet.iconColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(wallet.icon, color: wallet.iconColor, size: 24),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    wallet.displayName,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    wallet.status,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.text3,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${AppConstants.currencySymbol} ${wallet.balance.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.blue,
-                  ),
-                ),
-                Text(
-                  loc.balance,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.text3,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+    return WalletCard(
+      wallet: wallet,
+      loc: loc,
+      accountId: PreferencesService().getAccountId(),
+      isWorker: false,
+      balanceColor: AppColors.blue,
     );
   }
 

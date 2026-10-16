@@ -43,10 +43,16 @@ class JobClaim {
   final String workerName;
   final String requestedAt;
 
+  /// The worker's average rating; 5 when [ratingCount] is 0 (not rated yet).
+  final double rating;
+  final int ratingCount;
+
   const JobClaim({
     required this.workerId,
     this.workerName = '',
     this.requestedAt = '',
+    this.rating = 5,
+    this.ratingCount = 0,
   });
 
   factory JobClaim.fromJson(Map<String, dynamic> json) {
@@ -54,6 +60,8 @@ class JobClaim {
       workerId: (json['workerId'] ?? '').toString(),
       workerName: (json['workerName'] ?? '').toString(),
       requestedAt: (json['requestedAt'] ?? '').toString(),
+      rating: (json['rating'] as num?)?.toDouble() ?? 5,
+      ratingCount: (json['ratingCount'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -132,12 +140,24 @@ class ContractorProcessSummary {
   final String status;
   final ContractorProcessJobSummary? job;
 
+  /// History only: true once the contractor rated the worker of the
+  /// completed job.
+  final bool workerRatingCompleted;
+
   ContractorProcessSummary({
     required this.processId,
     required this.name,
     required this.status,
     this.job,
+    this.workerRatingCompleted = false,
   });
+
+  /// A completed job whose worker the contractor can rate (or already did).
+  bool get isWorkerRatable =>
+      status.toUpperCase() == 'COMPLETED' &&
+      job != null &&
+      job!.status.toUpperCase() == 'ENDED' &&
+      job!.assignedWorkerId.isNotEmpty;
 
   factory ContractorProcessSummary.fromJson(Map<String, dynamic> json) {
     return ContractorProcessSummary(
@@ -149,6 +169,7 @@ class ContractorProcessSummary {
               json['job'] as Map<String, dynamic>,
             )
           : null,
+      workerRatingCompleted: json['workerRatingCompleted'] == true,
     );
   }
 }

@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../widgets/app_toast.dart';
 import 'api_service.dart';
 import 'preferences_service.dart';
 
@@ -16,14 +16,10 @@ class NotificationService {
   NotificationService._();
 
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
-  static GlobalKey<ScaffoldMessengerState>? _messengerKey;
   static RemoteMessage? _pendingMessage;
   static String? _token;
 
-  static Future<void> initialize(
-    GlobalKey<ScaffoldMessengerState> messengerKey,
-  ) async {
-    _messengerKey = messengerKey;
+  static Future<void> initialize() async {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
     await _messaging.requestPermission(alert: true, badge: true, sound: true);
@@ -102,10 +98,7 @@ class NotificationService {
 
     if (text.isEmpty) return;
 
-    final messenger = _messengerKey?.currentState;
-    messenger
-      ?..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(text)));
+    AppToast.info(text);
   }
 
   static void _handleOpenedMessage(RemoteMessage message) {

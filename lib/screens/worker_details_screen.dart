@@ -17,6 +17,8 @@ import '../services/preferences_service.dart';
 import '../theme.dart';
 import '../utils/performance_utils.dart';
 import 'create_worker_availability_screen.dart';
+import '../widgets/app_toast.dart';
+import '../widgets/wallet_card.dart';
 
 class Debouncer {
   final Duration delay;
@@ -247,12 +249,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       _currentWorker = updated.copyWith(photoBase64: photoBase64);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_loc.profilePhotoUpdated),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      AppToast.success(_loc.profilePhotoUpdated);
     } catch (e) {
       if (!mounted) return;
       _showTopError(_errorMessage(e));
@@ -304,9 +301,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
     final accountId = PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.accountIdMissing)));
+      AppToast.error(_loc.accountIdMissing);
       return;
     }
 
@@ -350,16 +345,12 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.profileUpdated)));
+      AppToast.success(_loc.profileUpdated);
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${_loc.failedToUpdateWorker}: $e')),
-      );
+      AppToast.fromError(e, loc: _loc, fallback: _loc.failedToUpdateWorker);
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -414,12 +405,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_loc.profileUpdated),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      AppToast.success(_loc.profileUpdated);
     } catch (e) {
       if (!mounted) return;
       _showTopError(_errorMessage(e));
@@ -628,9 +614,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   void _showCategoryDescription(Category category) {
     final description = category.description.trim();
     if (description.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_loc.noDescriptionAvailableForThisCategory)),
-      );
+      AppToast.warning(_loc.noDescriptionAvailableForThisCategory);
       return;
     }
 
@@ -665,16 +649,12 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   Future<void> _updateCategories() async {
     final accountId = PreferencesService().getAccountId();
     if (accountId == null || accountId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.accountIdMissing)));
+      AppToast.error(_loc.accountIdMissing);
       return;
     }
 
     if (_selectedCategoryIds.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.selectAtLeastOneSkill)));
+      AppToast.warning(_loc.selectAtLeastOneSkill);
       return;
     }
 
@@ -691,16 +671,12 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       final invalidValues = _invalidSelectedCategoryValues(categories);
 
       if (workerCategories.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(_loc.pleaseSelectValidSkills)));
+        AppToast.warning(_loc.pleaseSelectValidSkills);
         return;
       }
 
       if (invalidValues.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_loc.invalidCategoryNamesReselect)),
-        );
+        AppToast.warning(_loc.invalidCategoryNamesReselect);
         return;
       }
 
@@ -710,9 +686,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
       );
 
       if (workerCategoryIds.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(_loc.unableToResolveSkills)));
+        AppToast.error(_loc.unableToResolveSkills);
         return;
       }
 
@@ -731,18 +705,14 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_loc.workerSkillsUpdatedSuccessfully)),
-      );
+      AppToast.success(_loc.workerSkillsUpdatedSuccessfully);
       setState(() {
         _showCategoryEditor = false;
       });
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${_loc.failedToUpdateSkills}: $e')),
-      );
+      AppToast.fromError(e, loc: _loc, fallback: _loc.failedToUpdateSkills);
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -1638,74 +1608,12 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
   }
 
   Widget _buildWalletTile(Wallet wallet) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.gray2, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: wallet.iconColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(wallet.icon, color: wallet.iconColor, size: 24),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    wallet.displayName,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    wallet.status,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.text3,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${AppConstants.currencySymbol} ${wallet.balance.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.green,
-                  ),
-                ),
-                Text(
-                  _loc.balance,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.text3,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+    return WalletCard(
+      wallet: wallet,
+      loc: _loc,
+      accountId: PreferencesService().getAccountId(),
+      isWorker: true,
+      balanceColor: AppColors.green,
     );
   }
 

@@ -10,6 +10,7 @@ import '../services/job_photo_upload.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
 import 'home_screen.dart';
+import '../widgets/app_toast.dart';
 
 class ProfilePhotoUploadScreen extends StatefulWidget {
   final String profileType;
@@ -108,15 +109,11 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(loc.profilePhotoUpdated)));
+        AppToast.success(loc.profilePhotoUpdated);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${loc.failedToUploadPhoto}: $e')),
-        );
+        AppToast.fromError(e, loc: loc, fallback: loc.failedToUploadPhoto);
       }
     } finally {
       if (mounted) {

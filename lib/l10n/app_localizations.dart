@@ -707,6 +707,53 @@ class AppLocalizations {
     return 'Requested: $time';
   }
 
+  // WORKER RATING
+
+  String rateWorkerName(String workerName) {
+    if (isSinhala) return '$workerName ශ්‍රේණිගත කරන්න';
+    return 'Rate $workerName';
+  }
+
+  String get rateThisWorker {
+    if (isSinhala) return 'මෙම කම්කරු ශ්‍රේණිගත කරන්න';
+    return 'Rate this worker';
+  }
+
+  String get howWasTheWork {
+    if (isSinhala) return 'වැඩය කෙසේද?';
+    return 'How was the work?';
+  }
+
+  String get addCommentOptional {
+    if (isSinhala) return 'අදහසක් එක් කරන්න (අත්‍යවශ්‍ය නොවේ)';
+    return 'Add a comment (optional)';
+  }
+
+  String get submit {
+    if (isSinhala) return 'ඉදිරිපත් කරන්න';
+    return 'Submit';
+  }
+
+  String get ratingSubmitted {
+    if (isSinhala) return 'ශ්‍රේණිගත කිරීම ඉදිරිපත් කරන ලදී';
+    return 'Rating submitted';
+  }
+
+  String get failedToSubmitRating {
+    if (isSinhala) return 'ශ්‍රේණිගත කිරීම අසාර්ථක විය';
+    return 'Failed to submit rating';
+  }
+
+  String get workerRated {
+    if (isSinhala) return 'ඔබ මෙම කම්කරු ශ්‍රේණිගත කර ඇත';
+    return 'You rated this worker';
+  }
+
+  String get noRatingsYet {
+    if (isSinhala) return 'තවම ශ්‍රේණිගත කර නැත';
+    return 'No ratings yet';
+  }
+
   String get jobStartedSuccessfully {
     if (isSinhala) return 'රැකියාව සාර්ථකව ආරම්භ කරන ලදී';
     return 'Job started successfully';
@@ -1674,6 +1721,85 @@ class AppLocalizations {
         return isSinhala ? 'නොදනී' : 'UNKNOWN';
       default:
         return status;
+    }
+  }
+
+  // WALLET LEDGER
+
+  String get earned => isSinhala ? 'උපයාගත්' : 'Earned';
+
+  String get paid => isSinhala ? 'ගෙවූ' : 'Paid';
+
+  String get transactionHistory =>
+      isSinhala ? 'ගනුදෙනු ඉතිහාසය' : 'Transaction history';
+
+  String get noTransactionsYet =>
+      isSinhala ? 'තවමත් ගනුදෙනු නැත' : 'No transactions yet';
+
+  String get failedToLoadTransactions => isSinhala
+      ? 'ගනුදෙනු පූරණය කිරීමට අසමත් විය'
+      : 'Failed to load transactions';
+
+  String get jobPaymentReceived =>
+      isSinhala ? 'රැකියා ගෙවීම ලැබුණි' : 'Job payment received';
+
+  String get jobPaymentMade => isSinhala ? 'රැකියා ගෙවීම' : 'Job payment';
+
+  String balanceAfter(String amount) =>
+      isSinhala ? 'ශේෂය: $amount' : 'Balance: $amount';
+
+  // TOP MESSAGES
+
+  String get signedInSuccessfully {
+    if (isSinhala) return 'සාර්ථකව ඇතුළු විය';
+    return 'Signed in successfully';
+  }
+
+  String get accountCreatedSuccessfully {
+    if (isSinhala) return 'ගිණුම සාර්ථකව සාදන ලදී';
+    return 'Account created successfully';
+  }
+
+  String get failedToCreateAccount {
+    if (isSinhala) return 'ගිණුම සෑදීමට අසමත් විය';
+    return 'Failed to create account';
+  }
+
+  /// Message for a job state conflict (HTTP 409), keyed by the backend description.
+  String conflictMessage(String description) {
+    switch (description) {
+      case 'job is not open for claiming':
+        return isSinhala
+            ? 'මෙම රැකියාව දැනටමත් වෙනත් කම්කරුවෙකු ඉල්ලා ඇත හෝ තවදුරටත් ලබා ගත නොහැක'
+            : 'This job was already picked by another worker or is no longer open';
+      case 'contractor already rejected this worker for the job':
+        return isSinhala
+            ? 'කොන්ත්‍රාත්කරු මෙම රැකියාව සඳහා ඔබේ ඉල්ලීම ප්‍රතික්ෂේප කර ඇත'
+            : 'The contractor already declined your request for this job';
+      case "job has no claim awaiting this contractor's approval":
+        return isSinhala
+            ? 'අනුමත කිරීමට ඉල්ලීමක් නැත. එය කල් ඉකුත් වී හෝ දැනටමත් තීරණය කර ඇත'
+            : 'There is no request to review. It may have expired or already been decided';
+      case 'job is not approved for this worker':
+        return isSinhala
+            ? 'කොන්ත්‍රාත්කරු අනුමත කරන තුරු මෙම රැකියාව ආරම්භ කළ නොහැක'
+            : 'You can start this job only after the contractor approves it';
+      case 'job is not started by this worker':
+        return isSinhala
+            ? 'ආරම්භ කළ රැකියාවක් පමණක් සම්පූර්ණ කළ හැක'
+            : 'Only a job you have started can be completed';
+      case 'job is not completed for this contractor':
+        return isSinhala
+            ? 'සම්පූර්ණ කළ රැකියාවක් පමණක් ශ්‍රේණිගත කළ හැක'
+            : 'You can rate the worker only after the job is completed';
+      case 'worker is already rated for this job':
+        return isSinhala
+            ? 'ඔබ දැනටමත් මෙම රැකියාව සඳහා කම්කරුවා ශ්‍රේණිගත කර ඇත'
+            : 'You already rated the worker for this job';
+      default:
+        return isSinhala
+            ? 'මෙම රැකියාව වෙනස් වී ඇත. නැවුම් කර නැවත උත්සාහ කරන්න'
+            : 'This job has changed. Refresh and try again';
     }
   }
 }

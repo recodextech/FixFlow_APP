@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/availability.dart';
+import '../models/worker_rating.dart';
 import '../models/worker.dart';
 import '../models/contractor.dart';
 import '../models/user_accounts.dart';
@@ -12,7 +13,11 @@ import 'auth_service.dart';
 import 'preferences_service.dart';
 
 class ApiException implements Exception {
+  /// Backend code for job state conflicts (claim taken, not approved, already rated...)
+  static const int conflictCode = 400001;
+
   final int? statusCode;
+  final int? code;
   final String message;
   final String? trace;
   final String? debug;
@@ -20,9 +25,13 @@ class ApiException implements Exception {
   const ApiException({
     required this.message,
     this.statusCode,
+    this.code,
     this.trace,
     this.debug,
   });
+
+  /// The action is no longer possible because the job changed state.
+  bool get isConflict => statusCode == 409 || code == conflictCode;
 
   @override
   String toString() => message;
@@ -159,6 +168,7 @@ class ApiService {
     required http.Response response,
   }) {
     String message = fallbackMessage;
+    int? code;
     String? trace;
     String? debug;
 
@@ -167,6 +177,8 @@ class ApiService {
       if (decoded is Map<String, dynamic>) {
         final description = decoded['description']?.toString().trim();
         final apiMessage = decoded['message']?.toString().trim();
+        final rawCode = decoded['code'];
+        code = rawCode is num ? rawCode.toInt() : int.tryParse('$rawCode');
         trace = decoded['trace']?.toString();
         debug = decoded['debug']?.toString();
 
@@ -186,6 +198,7 @@ class ApiService {
     return ApiException(
       message: message,
       statusCode: response.statusCode,
+      code: code,
       trace: trace,
       debug: debug,
     );
@@ -1033,6 +1046,65 @@ class ApiService {
     }
   }
 
+  /// Rating summary of a worker; [WorkerRating.hasRatings] is false when
+  /// nobody has rated them yet.
+  Future<WorkerRating> getWorkerRating(
+    String workerId, {
+    String? accountId,
+  }) async {
+    try {
+      final response = await _sendWithAuthRetry(
+        method: 'GET',
+        uri: Uri.parse('$_gatewayUrl$_managementPath/workers/$workerId/rating'),
+        accountId: accountId,
+        traceId: _buildTraceId(),
+      );
+
+      if (response.statusCode != 200) {
+        throw _buildApiException(
+          fallbackMessage: 'Failed to load worker rating',
+          response: response,
+        );
+      }
+
+      return WorkerRating.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    } catch (e) {
+      print('Error fetching worker rating: $e');
+      rethrow;
+    }
+  }
+
+  /// Rate (1-5) the worker of the contractor's completed job, once per job.
+  Future<void> rateJobWorker({
+    required String contractorId,
+    required String jobId,
+    required int rating,
+    String comment = '',
+    required String accountId,
+  }) async {
+    final response = await _sendWithAuthRetry(
+      method: 'POST',
+      uri: Uri.parse(
+        '$_gatewayUrl$_managementPath/contractor/$contractorId/job/$jobId/rating',
+      ),
+      accountId: accountId,
+      traceId: _buildTraceId(),
+      body: jsonEncode({
+        'rating': rating,
+        if (comment.isNotEmpty) 'comment': comment,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw _buildApiException(
+        fallbackMessage: 'Failed to rate worker',
+        response: response,
+      );
+    }
+  }
+
   /// Get single contractor by ID
   Future<Contractor?> getContractor(
     String contractorId, {
@@ -1104,6 +1176,39 @@ class ApiService {
       rethrow;
     }
   }
+  /// Ledger entries of one of the account's wallets, newest first.
+  Future<List<WalletTransaction>> getWalletTransactions({
+    required String walletId,
+    String? accountId,
+  }) async {
+    final response = await _sendWithAuthRetry(
+      method: 'GET',
+      uri: Uri.parse('$_gatewayUrl$_paymentPath/wallets/$walletId/transactions'),
+      accountId: accountId,
+    );
+
+    if (response.statusCode != 200) {
+      throw _buildApiException(
+        fallbackMessage: 'Failed to load wallet transactions',
+        response: response,
+      );
+    }
+
+    final data = jsonDecode(response.body);
+    // Handle both list response and object with transactions key
+    final List<dynamic> list;
+    if (data is List) {
+      list = data;
+    } else if (data is Map<String, dynamic>) {
+      list = data['transactions'] as List<dynamic>? ?? [];
+    } else {
+      list = [];
+    }
+    return list
+        .map((json) => WalletTransaction.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+
 
   /// Get active processes for a contractor
   Future<ContractorActiveProcesses> getActiveContractorProcesses({

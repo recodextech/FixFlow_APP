@@ -14,6 +14,7 @@ import 'worker_profile_screen.dart';
 import 'contractor_profile_screen.dart';
 import 'create_user_screen.dart';
 import 'login_screen.dart';
+import '../widgets/app_toast.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -480,9 +481,7 @@ class _AboutUsCard extends StatelessWidget {
       final loc = AppLocalizations.of(
         Provider.of<LanguageProvider>(context, listen: false).locale,
       );
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text(loc.unableToOpenPhoneDialer)));
+      AppToast.error(loc.unableToOpenPhoneDialer);
     }
   }
 
@@ -491,9 +490,7 @@ class _AboutUsCard extends StatelessWidget {
       Provider.of<LanguageProvider>(context, listen: false).locale,
     );
     await Clipboard.setData(ClipboardData(text: email));
-    ScaffoldMessenger.maybeOf(
-      context,
-    )?.showSnackBar(SnackBar(content: Text(loc.emailCopiedToClipboard)));
+    AppToast.success(loc.emailCopiedToClipboard);
   }
 
   @override

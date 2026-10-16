@@ -12,6 +12,7 @@ import '../services/preferences_service.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 import 'profile_photo_upload_screen.dart';
+import '../widgets/app_toast.dart';
 
 class CreateUserScreen extends StatefulWidget {
   const CreateUserScreen({super.key});
@@ -117,9 +118,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
   void _showCategoryDescription(Category category, AppLocalizations loc) {
     final description = category.description.trim();
     if (description.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(loc.noDescriptionAvailableForThisCategory)),
-      );
+      AppToast.warning(loc.noDescriptionAvailableForThisCategory);
       return;
     }
 
@@ -320,6 +319,11 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       await NotificationService.registerDeviceForActiveAccount();
 
       if (!mounted) return;
+      AppToast.success(
+        AppLocalizations.of(
+          context.read<LanguageProvider>().locale,
+        ).accountCreatedSuccessfully,
+      );
 
       if (latestAccounts.worker != null || latestAccounts.contractor != null) {
         final worker = latestAccounts.worker;
@@ -353,13 +357,10 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       return;
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${AppLocalizations.of(context.read<LanguageProvider>().locale).error}: $e',
-            ),
-          ),
+        final loc = AppLocalizations.of(
+          context.read<LanguageProvider>().locale,
         );
+        AppToast.fromError(e, loc: loc, fallback: loc.failedToCreateAccount);
       }
     } finally {
       if (mounted) {

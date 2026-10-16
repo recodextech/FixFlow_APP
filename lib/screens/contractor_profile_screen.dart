@@ -11,10 +11,13 @@ import '../services/api_service.dart';
 import '../theme.dart';
 import '../widgets/job_images_widget.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/rate_worker_sheet.dart';
+import '../widgets/star_rating.dart';
 import '../l10n/app_localizations.dart';
 import 'contractor_info_screen.dart';
 import 'contractor_widgets.dart';
 import 'create_process_dialog.dart';
+import '../widgets/app_toast.dart';
 
 class ContractorProfileScreen extends StatefulWidget {
   final String contractorId;
@@ -36,6 +39,10 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   bool _isActiveProcessesExpanded = false;
   final Set<String> _claimActionInProgress = {};
   final Map<String, Future<Worker?>> _claimWorkerFutures = {};
+
+  /// Jobs rated in this session, so the card switches to "rated" before the
+  /// history list reloads.
+  final Set<String> _ratedJobIds = {};
 
   @override
   void initState() {
@@ -95,9 +102,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   Future<void> _showCreateProcessDialog() async {
     final accountId = PreferencesService().getAccountId();
     if (accountId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.accountIdMissing)));
+      AppToast.error(_loc.accountIdMissing);
       return;
     }
 
@@ -115,9 +120,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
       _activeProcessesFuture = _loadActiveProcesses();
     });
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(_loc.processCreatedSuccessfully)));
+    AppToast.success(_loc.processCreatedSuccessfully);
   }
 
   Future<void> _openContractorInfo({Contractor? contractor}) async {
@@ -154,14 +157,10 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
         _activeProcessesFuture = _loadActiveProcesses();
       });
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.processDeletedSuccessfully)));
+      AppToast.success(_loc.processDeletedSuccessfully);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${_loc.failedToDeleteProcess}: $e')),
-      );
+      AppToast.fromError(e, loc: _loc, fallback: _loc.failedToDeleteProcess);
     }
   }
 
@@ -249,9 +248,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   }) async {
     final accountId = PreferencesService().getAccountId();
     if (accountId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_loc.accountIdMissing)));
+      AppToast.error(_loc.accountIdMissing);
       return;
     }
 
@@ -260,14 +257,10 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     try {
       await action(accountId);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(successMessage)));
+      AppToast.success(successMessage);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$failureMessage: $e')));
+      AppToast.fromError(e, loc: _loc, fallback: failureMessage);
     } finally {
       // Reload either way: on failure the claim may have expired or been
       // handled elsewhere, so show the current state.
@@ -278,6 +271,46 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
         });
       }
     }
+  }
+
+  Future<void> _openRateWorkerSheet(
+    ContractorProcessSummary process,
+    int initialRating,
+  ) async {
+    final job = process.job!;
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null) {
+      AppToast.error(_loc.accountIdMissing);
+      return;
+    }
+
+    final submitted = await showRateWorkerSheet(
+      context: context,
+      loc: _loc,
+      workerName: job.assignedWorkerName.isNotEmpty
+          ? job.assignedWorkerName
+          : _loc.worker,
+      initialRating: initialRating,
+      onSubmit: (rating, comment) => ApiService().rateJobWorker(
+        contractorId: widget.contractorId,
+        jobId: job.id,
+        rating: rating,
+        comment: comment,
+        accountId: accountId,
+      ),
+    );
+
+    if (!mounted) return;
+    if (!submitted) {
+      // The job may have changed (already rated, no longer completed); show its current state
+      setState(() => _historyProcessesFuture = _loadHistoryProcesses());
+      return;
+    }
+    setState(() {
+      _ratedJobIds.add(job.id);
+      _historyProcessesFuture = _loadHistoryProcesses();
+    });
+    AppToast.success(_loc.ratingSubmitted);
   }
 
   Future<Worker?> _loadClaimWorker(String workerId) {
@@ -515,16 +548,13 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                             ),
                           );
                         }
-                        final historyProcesses = (historySnapshot.data ?? [])
-                          ..sort((a, b) {
-                            final startA = a.job?.jobStartTime ?? '';
-                            final startB = b.job?.jobStartTime ?? '';
-                            return startB.compareTo(startA);
-                          });
+                        // Kept in server order: most recent activity first.
+                        final historyProcesses = historySnapshot.data ?? [];
                         return _buildProcessList(
                           historyProcesses,
                           loc.noCompletedProcesses,
                           loc.completedJobsWillShowHere,
+                          isHistory: true,
                         );
                       },
                     ),
@@ -785,8 +815,9 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   Widget _buildProcessList(
     List<ContractorProcessSummary> processes,
     String emptyTitle,
-    String emptySubtitle,
-  ) {
+    String emptySubtitle, {
+    bool isHistory = false,
+  }) {
     if (processes.isEmpty) {
       return Center(
         child: Padding(
@@ -827,7 +858,8 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: processes.length,
-        itemBuilder: (context, index) => _buildProcessCard(processes[index]),
+        itemBuilder: (context, index) =>
+            _buildProcessCard(processes[index], isHistory: isHistory),
       ),
     );
   }
@@ -840,7 +872,12 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     return '$method · $amount';
   }
 
-  Widget _buildProcessCard(ContractorProcessSummary process) {
+  /// [isHistory] trims the card to the essentials: no location, and only the
+  /// worker's avatar with the rating.
+  Widget _buildProcessCard(
+    ContractorProcessSummary process, {
+    bool isHistory = false,
+  }) {
     final loc = _loc;
     final job = process.job;
     final statusColor = getProcessStatusColor(process.status);
@@ -942,19 +979,51 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                   _formatPayment(job.paymentInformation!),
                 ),
               ],
-              const SizedBox(height: 6),
-              _buildAddressRow(
-                Icons.location_on_outlined,
-                loc.location,
-                job.latitude,
-                job.longitude,
-              ),
+              if (!isHistory) ...[
+                const SizedBox(height: 6),
+                _buildAddressRow(
+                  Icons.location_on_outlined,
+                  loc.location,
+                  job.latitude,
+                  job.longitude,
+                ),
+              ],
               const SizedBox(height: 8),
               if (job.isAwaitingApproval)
                 _buildPendingClaimSection(job.id, job.claim!, loc)
               else if (job.hasClaim)
                 _buildClosedClaimNote(job.approvalStatus, job.claim!, loc),
-              if (job.assignedWorkerId.isNotEmpty) ...[
+              if (isHistory && job.assignedWorkerId.isNotEmpty) ...[
+                const Divider(height: 12),
+                Row(
+                  children: [
+                    InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => Navigator.pushNamed(
+                        context,
+                        '/worker/${job.assignedWorkerId}',
+                      ),
+                      child: ProfileAvatar(
+                        id: job.assignedWorkerId,
+                        isWorker: true,
+                        radius: 20,
+                      ),
+                    ),
+                    if (process.isWorkerRatable &&
+                        !process.workerRatingCompleted &&
+                        !_ratedJobIds.contains(job.id)) ...[
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildWorkerRatingRow(
+                          process,
+                          loc,
+                          inline: true,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ] else if (job.assignedWorkerId.isNotEmpty) ...[
                 const Divider(height: 12),
                 Row(
                   children: [
@@ -1022,11 +1091,71 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                     ),
                   ],
                 ),
+                if (process.isWorkerRatable)
+                  _buildWorkerRatingRow(process, loc),
               ],
             ],
           ],
         ),
       ),
+    );
+  }
+
+  /// Completed job: five stars to rate the worker, which open the comment
+  /// sheet; once rated, a note instead.
+  Widget _buildWorkerRatingRow(
+    ContractorProcessSummary process,
+    AppLocalizations loc, {
+    bool inline = false,
+  }) {
+    final isRated =
+        process.workerRatingCompleted || _ratedJobIds.contains(process.job!.id);
+
+    return Container(
+      margin: EdgeInsets.only(top: inline ? 0 : 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isRated ? AppColors.greenPale : AppColors.gray0,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: isRated
+          ? Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 18,
+                  color: AppColors.green,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  loc.workerRated,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.green,
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    loc.rateThisWorker,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
+                    ),
+                  ),
+                ),
+                StarRatingInput(
+                  value: 0,
+                  size: 28,
+                  onChanged: (rating) => _openRateWorkerSheet(process, rating),
+                ),
+              ],
+            ),
     );
   }
 
@@ -1100,6 +1229,13 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          StarRatingDisplay(
+                            rating: claim.rating,
+                            count: claim.ratingCount,
+                            emptyLabel: loc.noRatingsYet,
+                            size: 15,
                           ),
                           if (claim.requestedAt.isNotEmpty)
                             Text(
