@@ -985,6 +985,38 @@ class AppLocalizations {
     return 'Start Job';
   }
 
+  String get cancelJob {
+    if (isSinhala) return 'රැකියාව අවලංගු කරන්න';
+    return 'Cancel Job';
+  }
+
+  String get cancelJobTitle {
+    if (isSinhala) return 'මෙම රැකියාව අවලංගු කරන්නද?';
+    return 'Cancel this job?';
+  }
+
+  String get cancelJobMessage {
+    if (isSinhala) {
+      return 'රැකියාව ආරම්භ කිරීමට පෙර පමණක් අවලංගු කළ හැක. ආරම්භ කළ පසු එය අවලංගු කළ නොහැක.';
+    }
+    return 'A job can only be cancelled before it starts. Once started, it can no longer be cancelled.';
+  }
+
+  String get keepJob {
+    if (isSinhala) return 'තබා ගන්න';
+    return 'Keep Job';
+  }
+
+  String get jobCancelledSuccessfully {
+    if (isSinhala) return 'රැකියාව අවලංගු කරන ලදී';
+    return 'Job cancelled';
+  }
+
+  String get failedToCancelJob {
+    if (isSinhala) return 'රැකියාව අවලංගු කිරීම අසාර්ථක විය';
+    return 'Failed to cancel job';
+  }
+
   String get completeJob {
     if (isSinhala) return 'සම්පූර්ණ කරන්න';
     return 'Complete';

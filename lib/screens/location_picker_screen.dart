@@ -7,11 +7,20 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/language_provider.dart';
+import '../utils/device_location.dart';
 
 class LocationPickerScreen extends StatefulWidget {
   final LatLng initialLocation;
 
-  const LocationPickerScreen({super.key, required this.initialLocation});
+  /// When true, centers on the device location once it resolves, unless the
+  /// user has already tapped or searched for a location.
+  final bool locateOnOpen;
+
+  const LocationPickerScreen({
+    super.key,
+    required this.initialLocation,
+    this.locateOnOpen = false,
+  });
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();
@@ -35,12 +44,30 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   bool _isSearching = false;
   Timer? _debounce;
   String _address = '';
+  bool _userInteracted = false;
+  bool _isLocating = false;
 
   @override
   void initState() {
     super.initState();
     _pickedLocation = widget.initialLocation;
     _reverseGeocode(_pickedLocation);
+    if (widget.locateOnOpen) _locateDevice(force: false);
+  }
+
+  Future<void> _locateDevice({required bool force}) async {
+    if (force) _userInteracted = false;
+    setState(() => _isLocating = true);
+    void apply(LatLng location) {
+      if (!mounted || _userInteracted) return;
+      setState(() => _pickedLocation = location);
+      _mapController.move(location, 15.0);
+      _reverseGeocode(location);
+    }
+
+    final location = await getDeviceLocation(onLastKnown: apply);
+    if (location != null) apply(location);
+    if (mounted) setState(() => _isLocating = false);
   }
 
   @override
@@ -119,6 +146,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void _selectSearchResult(_SearchResult result) {
     final location = LatLng(result.lat, result.lon);
     setState(() {
+      _userInteracted = true;
       _pickedLocation = location;
       _address = result.displayName;
       _searchResults = [];
@@ -129,6 +157,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   void _onMapTap(TapPosition tapPosition, LatLng point) {
     setState(() {
+      _userInteracted = true;
       _pickedLocation = point;
       _searchResults = [];
     });
@@ -147,6 +176,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   Widget _buildLocationPickerUI(BuildContext context, AppLocalizations loc) {
     return Scaffold(
+      floatingActionButton: FloatingActionButton.small(
+        onPressed: _isLocating ? null : () => _locateDevice(force: true),
+        child: _isLocating
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.my_location),
+      ),
       appBar: AppBar(
         title: Text(loc.pickLocation),
         actions: [

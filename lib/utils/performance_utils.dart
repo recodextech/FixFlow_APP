@@ -1,21 +1,26 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
-/// Image cache to avoid repeated base64 decoding and memory image creation.
-class ImageCache {
-  static final ImageCache _instance = ImageCache._internal();
-  final Map<String, Uint8List> _decodedImages = {};
-  final Map<String, MemoryImage> _memoryImages = {};
+/// Small LRU cache of decoded base64 images, so rebuilds don't re-decode the
+/// same payload. Bounded so photos from screens left long ago are released.
+class Base64ImageCache {
+  static const int maxEntries = 20;
 
-  factory ImageCache() => _instance;
-  ImageCache._internal();
+  static final Base64ImageCache _instance = Base64ImageCache._internal();
+  final LinkedHashMap<String, Uint8List> _decodedImages = LinkedHashMap();
+
+  factory Base64ImageCache() => _instance;
+  Base64ImageCache._internal();
+
+  static final RegExp _dataUriPrefix = RegExp(
+    r'^data:(image|application)/[^;]+;base64,',
+  );
 
   String _normalizeBase64(String raw) {
     final trimmed = raw.trim();
-    final dataUriMatch = RegExp(
-      r'^data:(image|application)/[^;]+;base64,',
-    ).firstMatch(trimmed);
+    final dataUriMatch = _dataUriPrefix.firstMatch(trimmed);
 
     if (dataUriMatch != null) {
       return trimmed.substring(dataUriMatch.end);
@@ -31,94 +36,67 @@ class ImageCache {
     final normalized = _normalizeBase64(base64String);
     if (normalized.isEmpty) return null;
 
-    if (_decodedImages.containsKey(normalized)) {
-      return _decodedImages[normalized];
+    final cached = _decodedImages.remove(normalized);
+    if (cached != null) {
+      // Re-insert to mark as most recently used.
+      _decodedImages[normalized] = cached;
+      return cached;
     }
 
     try {
       final bytes = base64Decode(normalized);
       _decodedImages[normalized] = bytes;
+      if (_decodedImages.length > maxEntries) {
+        _decodedImages.remove(_decodedImages.keys.first);
+      }
       return bytes;
     } catch (_) {
       return null;
     }
   }
 
-  /// Get or create MemoryImage from base64, cached for performance.
-  MemoryImage? getMemoryImage(String? base64String) {
-    if (base64String == null || base64String.isEmpty) return null;
-
-    final normalized = _normalizeBase64(base64String);
-    if (normalized.isEmpty) return null;
-
-    if (_memoryImages.containsKey(normalized)) {
-      return _memoryImages[normalized];
-    }
-
-    final bytes = decodeBase64(normalized);
-    if (bytes == null) return null;
-
-    final image = MemoryImage(bytes);
-    _memoryImages[normalized] = image;
-    return image;
-  }
-
   /// Clear cache to free memory when needed.
-  void clear() {
-    _decodedImages.clear();
-    _memoryImages.clear();
-  }
+  void clear() => _decodedImages.clear();
 
   /// Get current cache size (for debugging).
-  int get cacheSize => _decodedImages.length + _memoryImages.length;
-}
-
-/// Memoized gradient builder to avoid recreating gradients.
-class GradientCache {
-  static final GradientCache _instance = GradientCache._internal();
-  final Map<String, LinearGradient> _gradients = {};
-
-  factory GradientCache() => _instance;
-  GradientCache._internal();
-
-  LinearGradient getLinearGradient({
-    required String key,
-    required Alignment begin,
-    required Alignment end,
-    required List<Color> colors,
-  }) {
-    if (_gradients.containsKey(key)) {
-      return _gradients[key]!;
-    }
-
-    final gradient = LinearGradient(begin: begin, end: end, colors: colors);
-    _gradients[key] = gradient;
-    return gradient;
-  }
-
-  void clear() => _gradients.clear();
+  int get cacheSize => _decodedImages.length;
 }
 
 /// Utility for performance-conscious widgets.
 class PerformanceUtils {
-  static final ImageCache imageCache = ImageCache();
-  static final GradientCache gradientCache = GradientCache();
+  static final Base64ImageCache imageCache = Base64ImageCache();
 
   /// Decode base64 image with caching.
   static Uint8List? decodeImage(String? base64String) {
     return imageCache.decodeBase64(base64String);
   }
 
-  /// Get MemoryImage provider with caching.
-  static MemoryImage? getImageProvider(String? base64String) {
-    return imageCache.getMemoryImage(base64String);
+  /// Image provider decoded at [logicalWidth] instead of the photo's full
+  /// resolution. The same bytes give an equal [MemoryImage], so Flutter's
+  /// image cache reuses the decoded frame across rebuilds.
+  static ImageProvider? getImageProvider(
+    String? base64String, {
+    required double logicalWidth,
+    required double devicePixelRatio,
+  }) {
+    final bytes = decodeImage(base64String);
+    if (bytes == null) return null;
+    return ResizeImage.resizeIfNeeded(
+      _decodeWidth(logicalWidth, devicePixelRatio),
+      null,
+      MemoryImage(bytes),
+    );
+  }
+
+  static int? _decodeWidth(double? logicalWidth, double devicePixelRatio) {
+    if (logicalWidth == null || !logicalWidth.isFinite || logicalWidth <= 0) {
+      return null;
+    }
+    return (logicalWidth * devicePixelRatio).ceil();
   }
 
   /// Clear all caches.
-  static void clearCaches() {
-    imageCache.clear();
-    gradientCache.clear();
-  }
+  static void clearCaches() => imageCache.clear();
 }
 
 /// Wrapper for Image.memory with automatic caching and error handling.
@@ -160,12 +138,28 @@ class CachedMemoryImage extends StatelessWidget {
       return Container(width: width, height: height, color: Colors.grey[200]);
     }
 
-    return Image.memory(
-      bytes,
-      fit: fit,
-      width: width,
-      height: height,
-      errorBuilder: errorBuilder,
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Decode at the box's longer side, not the photo's full resolution,
+        // so cover-fit photos stay sharp whichever way they are cropped.
+        final boxWidth = width ?? constraints.maxWidth;
+        final boxHeight = height ?? constraints.maxHeight;
+        final displayWidth = !boxHeight.isFinite || boxWidth >= boxHeight
+            ? boxWidth
+            : boxHeight;
+        return Image.memory(
+          bytes,
+          fit: fit,
+          width: width,
+          height: height,
+          cacheWidth: PerformanceUtils._decodeWidth(
+            displayWidth,
+            devicePixelRatio,
+          ),
+          errorBuilder: errorBuilder,
+        );
+      },
     );
   }
 }
@@ -187,7 +181,11 @@ class CachedCircleAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageProvider = PerformanceUtils.getImageProvider(base64String);
+    final imageProvider = PerformanceUtils.getImageProvider(
+      base64String,
+      logicalWidth: radius * 2,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
 
     return CircleAvatar(
       radius: radius,

@@ -584,10 +584,10 @@ class _AboutUsCard extends StatelessWidget {
               _ContactTile(
                 icon: Icons.email_rounded,
                 label: loc.email,
-                value: 'inquiries@noventispvt.xyz',
+                value: 'inquiries@noventispvt.com',
                 actionLabel: loc.tapToCopy,
                 trailingIcon: Icons.copy_rounded,
-                onTap: () => _copyEmail(context, 'inquiries@noventispvt.xyz'),
+                onTap: () => _copyEmail(context, 'inquiries@noventispvt.com'),
               ),
             ],
           ),

@@ -44,7 +44,7 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
   bool _isUploading = false;
 
   Future<void> _showPhotoSourceSheet(AppLocalizations loc) async {
-    if (!mounted) return;
+    if (!mounted || _isUploading) return;
 
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
@@ -77,6 +77,7 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
     if (!mounted || bytes == null) return;
 
     setState(() => _selectedPhotoBytes = bytes);
+    await _continueToProfile(loc);
   }
 
   Future<void> _continueToProfile(AppLocalizations loc) async {
@@ -196,28 +197,74 @@ class _ProfilePhotoUploadScreenState extends State<ProfilePhotoUploadScreen> {
                     style: TextStyle(fontSize: 14, color: AppColors.text2),
                   ),
                   const SizedBox(height: 28),
-                  Container(
-                    width: 130,
-                    height: 130,
-                    decoration: BoxDecoration(
-                      color: accentPale,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: accentColor, width: 2),
+                  GestureDetector(
+                    onTap: _isUploading
+                        ? null
+                        : () => _showPhotoSourceSheet(loc),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 130,
+                          height: 130,
+                          decoration: BoxDecoration(
+                            color: accentPale,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: accentColor, width: 2),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: _selectedPhotoBytes == null
+                              ? Icon(
+                                  Icons.person_outline,
+                                  size: 56,
+                                  color: accentColor,
+                                )
+                              : Image.memory(
+                                  _selectedPhotoBytes!,
+                                  fit: BoxFit.cover,
+                                ),
+                        ),
+                        if (_isUploading)
+                          Container(
+                            width: 130,
+                            height: 130,
+                            decoration: const BoxDecoration(
+                              color: Colors.black38,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          right: 4,
+                          bottom: 4,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: accentColor,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: const Icon(
+                              Icons.photo_camera,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: _selectedPhotoBytes == null
-                        ? Icon(
-                            Icons.person_outline,
-                            size: 56,
-                            color: accentColor,
-                          )
-                        : Image.memory(_selectedPhotoBytes!, fit: BoxFit.cover),
                   ),
                   const SizedBox(height: 28),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () => _showPhotoSourceSheet(loc),
+                      onPressed: _isUploading
+                          ? null
+                          : () => _showPhotoSourceSheet(loc),
                       icon: const Icon(Icons.photo_camera_outlined),
                       label: Text(loc.chooseProfilePhoto),
                       style: ElevatedButton.styleFrom(

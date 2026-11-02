@@ -217,6 +217,20 @@ class WorkerProvider extends ChangeNotifier {
     await getWorkerAssignedJobs(workerId: workerId, accountId: accountId);
   }
 
+  /// Cancel an approved job before it starts
+  Future<void> cancelWorkerJob({
+    required String workerId,
+    required String jobId,
+    required String accountId,
+  }) async {
+    await _apiService.cancelWorkerJob(
+      workerId: workerId,
+      jobId: jobId,
+      accountId: accountId,
+    );
+    await getWorkerAssignedJobs(workerId: workerId, accountId: accountId);
+  }
+
   /// Mark worker job as success
   Future<void> completeWorkerJobSuccess({
     required String workerId,

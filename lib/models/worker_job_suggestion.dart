@@ -50,6 +50,7 @@ class WorkerJobSuggestion {
 class SuggestedJobInformation {
   final String jobId;
   final String jobStatus;
+  final String jobTitle;
   final String jobDescription;
   final double jobLatitude;
   final double jobLongitude;
@@ -69,6 +70,7 @@ class SuggestedJobInformation {
   const SuggestedJobInformation({
     required this.jobId,
     required this.jobStatus,
+    this.jobTitle = '',
     required this.jobDescription,
     required this.jobLatitude,
     required this.jobLongitude,
@@ -92,6 +94,7 @@ class SuggestedJobInformation {
     return SuggestedJobInformation(
       jobId: (json['jobId'] ?? '').toString(),
       jobStatus: (json['jobStatus'] ?? '').toString(),
+      jobTitle: (json['jobTitle'] ?? '').toString(),
       jobDescription: (json['jobDescription'] ?? json['description'] ?? '')
           .toString(),
       jobLatitude: _toDouble(json['jobLatitude']),

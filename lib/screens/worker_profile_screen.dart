@@ -10,14 +10,17 @@ import '../models/worker.dart';
 import '../models/worker_rating.dart';
 import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
+import '../widgets/job_history_card.dart';
 import '../widgets/job_images_widget.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/pull_to_refresh.dart';
 import '../widgets/star_rating.dart';
 import '../providers/worker_provider.dart';
 import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import '../services/preferences_service.dart';
 import '../theme.dart';
+import '../utils/live_refresh_mixin.dart';
 import '../l10n/app_localizations.dart';
 import 'create_worker_availability_screen.dart';
 import 'worker_details_screen.dart';
@@ -34,8 +37,9 @@ class WorkerProfileScreen extends StatefulWidget {
 }
 
 class _WorkerProfileScreenState extends State<WorkerProfileScreen>
-    with SingleTickerProviderStateMixin {
-  final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
+    with SingleTickerProviderStateMixin, LiveRefreshMixin {
+  // Short so the job card schedule row fits on small phones
+  final DateFormat _dateTimeFormat = DateFormat('d MMM, HH:mm');
   final Distance _distance = const Distance();
   late TabController _tabController;
 
@@ -83,12 +87,40 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     _historyJobsFuture = Future.value([]);
 
     _loadProfileData();
+    startLiveRefresh();
   }
 
   @override
   void dispose() {
+    stopLiveRefresh();
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  Future<void> onLiveRefresh() async {
+    // Suggestions and pending jobs change on new job notifications and claim
+    // approvals; pending jobs also drive the header status and tab badge.
+    final suggestions = _jobSuggestionsFuture;
+    final pending = _pendingJobsFuture;
+
+    // Start all fetches before awaiting so they run in parallel.
+    final suggestionsLoad = silentlyLoad(_loadJobSuggestions);
+    final pendingLoad = silentlyLoad(_loadPendingJobs);
+
+    final newSuggestions = await suggestionsLoad;
+    final newPending = await pendingLoad;
+    if (!mounted) return;
+
+    // Skip any list a user action reloaded while these requests were in flight.
+    setState(() {
+      if (identical(_jobSuggestionsFuture, suggestions)) {
+        _jobSuggestionsFuture = newSuggestions;
+      }
+      if (identical(_pendingJobsFuture, pending)) {
+        _pendingJobsFuture = newPending;
+      }
+    });
   }
 
   void _loadProfileData() {
@@ -504,6 +536,23 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     });
   }
 
+  // Swipe-down handlers: wait for the data so the refresh spinner stays up,
+  // and keep the current list on screen until the new one arrives.
+  Future<void> _pullJobSuggestions() async {
+    final suggestions = await silentlyLoad(_loadJobSuggestions);
+    if (mounted) setState(() => _jobSuggestionsFuture = suggestions);
+  }
+
+  Future<void> _pullPendingJobs() async {
+    final pending = await silentlyLoad(_loadPendingJobs);
+    if (mounted) setState(() => _pendingJobsFuture = pending);
+  }
+
+  Future<void> _pullHistoryJobs() async {
+    final history = await silentlyLoad(_loadHistoryJobs);
+    if (mounted) setState(() => _historyJobsFuture = history);
+  }
+
   Future<bool> _ensureAvailabilityBeforeAction() async {
     if (_hasAvailability) {
       return true;
@@ -760,6 +809,80 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         // the job changed (taken by another worker, not approved yet...): show its current state
         setState(() => _pendingJobsFuture = _loadPendingJobs());
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _jobActionInProgress.remove(jobId);
+        });
+      }
+    }
+  }
+
+  /// Only an approved job that has not started can be cancelled; once the
+  /// worker starts it, the card no longer offers cancel.
+  Future<void> _cancelPendingJob(
+    WorkerAssignedJob job,
+    AppLocalizations loc,
+  ) async {
+    final accountId = PreferencesService().getAccountId();
+    final jobId = job.jobId;
+
+    if (accountId == null || accountId.isEmpty) {
+      AppToast.error(loc.accountIdMissing);
+      return;
+    }
+
+    if (jobId.isEmpty) {
+      AppToast.error(loc.invalidJobId);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(loc.cancelJobTitle),
+        content: Text(loc.cancelJobMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(loc.keepJob),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            child: Text(loc.cancelJob),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _jobActionInProgress.add(jobId);
+    });
+
+    try {
+      await context.read<WorkerProvider>().cancelWorkerJob(
+        workerId: widget.workerId,
+        jobId: jobId,
+        accountId: accountId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _jobStatusOverrides.remove(jobId);
+        _pendingJobsFuture = _loadPendingJobs();
+      });
+
+      AppToast.success(loc.jobCancelledSuccessfully);
+    } catch (e) {
+      if (!mounted) return;
+
+      AppToast.fromError(e, loc: loc, fallback: loc.failedToCancelJob);
+      // The job may have changed meanwhile (e.g. started): show its current state
+      setState(() => _pendingJobsFuture = _loadPendingJobs());
     } finally {
       if (mounted) {
         setState(() {
@@ -1396,20 +1519,26 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         }
 
         if (snapshot.hasError) {
-          return _buildErrorState(
-            loc.couldNotLoadSuggestions,
-            _refreshJobSuggestions,
-            loc,
+          return PullToRefresh(
+            onRefresh: _pullJobSuggestions,
+            child: _buildErrorState(
+              loc.couldNotLoadSuggestions,
+              _refreshJobSuggestions,
+              loc,
+            ),
           );
         }
 
         final awaitingApproval = snapshot.data?.awaitingApprovalJobs ?? [];
         final suggestions = snapshot.data?.availableJobs ?? [];
         if (awaitingApproval.isEmpty && suggestions.isEmpty) {
-          return _buildEmptyState(
-            loc.noSuggestedJobs,
-            loc.jobSuggestionsDescription,
-            Icons.search_off_rounded,
+          return PullToRefresh(
+            onRefresh: _pullJobSuggestions,
+            child: _buildEmptyState(
+              loc.noSuggestedJobs,
+              loc.jobSuggestionsDescription,
+              Icons.search_off_rounded,
+            ),
           );
         }
 
@@ -1417,8 +1546,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         final hasAwaitingSection = awaitingApproval.isNotEmpty;
         final offset = hasAwaitingSection ? 1 : 0;
         return RefreshIndicator(
-          onRefresh: () async => _refreshJobSuggestions(),
+          onRefresh: _pullJobSuggestions,
           child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             itemCount: offset + (suggestions.isEmpty ? 1 : suggestions.length),
             itemBuilder: (context, index) {
@@ -1453,26 +1583,33 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         }
 
         if (snapshot.hasError) {
-          return _buildErrorState(
-            loc.couldNotLoadPendingJobs,
-            _refreshPendingJobs,
-            loc,
+          return PullToRefresh(
+            onRefresh: _pullPendingJobs,
+            child: _buildErrorState(
+              loc.couldNotLoadPendingJobs,
+              _refreshPendingJobs,
+              loc,
+            ),
           );
         }
 
         final pendingJobs = snapshot.data ?? [];
 
         if (pendingJobs.isEmpty) {
-          return _buildEmptyState(
-            loc.noPendingJobs,
-            loc.acceptSuggestedJobDescription,
-            Icons.assignment_outlined,
+          return PullToRefresh(
+            onRefresh: _pullPendingJobs,
+            child: _buildEmptyState(
+              loc.noPendingJobs,
+              loc.acceptSuggestedJobDescription,
+              Icons.assignment_outlined,
+            ),
           );
         }
 
         return RefreshIndicator(
-          onRefresh: () async => _refreshPendingJobs(),
+          onRefresh: _pullPendingJobs,
           child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             itemCount: pendingJobs.length,
             itemBuilder: (context, index) =>
@@ -1529,30 +1666,37 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
         }
 
         if (snapshot.hasError) {
-          return _buildErrorState(
-            loc.couldNotLoadHistory,
-            _refreshHistoryJobs,
-            loc,
+          return PullToRefresh(
+            onRefresh: _pullHistoryJobs,
+            child: _buildErrorState(
+              loc.couldNotLoadHistory,
+              _refreshHistoryJobs,
+              loc,
+            ),
           );
         }
 
         final historyJobs = snapshot.data ?? [];
 
         if (historyJobs.isEmpty) {
-          return _buildEmptyState(
-            loc.noCompletedJobs,
-            loc.completedJobsWillShowHere,
-            Icons.history_rounded,
+          return PullToRefresh(
+            onRefresh: _pullHistoryJobs,
+            child: _buildEmptyState(
+              loc.noCompletedJobs,
+              loc.completedJobsWillShowHere,
+              Icons.history_rounded,
+            ),
           );
         }
 
         return RefreshIndicator(
-          onRefresh: () async => _refreshHistoryJobs(),
+          onRefresh: _pullHistoryJobs,
           child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             itemCount: historyJobs.length,
             itemBuilder: (context, index) =>
-                _buildPendingJobCard(historyJobs[index], loc),
+                _buildHistoryJobCard(historyJobs[index], loc),
           ),
         );
       },
@@ -1627,6 +1771,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     final canCall = phone != loc.loading && phone != loc.unavailable;
 
     final jobTitle = _resolveJobTitle(
+      jobTitle: job.jobTitle,
       jobDescription: job.jobDescription,
       jobCategory: job.jobCategory,
     );
@@ -1732,6 +1877,32 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
+  /// History shows only the job itself: no contractor, phone, route or photos.
+  Widget _buildHistoryJobCard(WorkerAssignedJob job, AppLocalizations loc) {
+    final category = job.jobCategory.trim();
+    final description = job.jobDescription.trim();
+    final title = job.jobTitle.trim().isNotEmpty
+        ? job.jobTitle.trim()
+        : category.isNotEmpty
+        ? category
+        : _resolveJobTitle(jobDescription: description, jobCategory: '');
+    final processDescription = job.processDescription.trim();
+    final details = description.isNotEmpty && description != title
+        ? description
+        : (processDescription != title ? processDescription : '');
+
+    return JobHistoryCard(
+      title: title,
+      details: details,
+      statusChip: JobStatusChip(status: _resolvePendingJobStatus(job)),
+      startTime: job.jobStartTime,
+      rawStartTime: job.rawJobStartTime,
+      durationHours: job.duration,
+      amountLabel: loc.earned,
+      amount: job.jobPaymentAmount,
+    );
+  }
+
   Widget _buildPendingJobActionButtons({
     required WorkerAssignedJob job,
     required String status,
@@ -1749,7 +1920,26 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
 
     return Row(
       children: [
-        if (canStart)
+        if (canStart) ...[
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: isInProgress
+                  ? null
+                  : () => _cancelPendingJob(job, loc),
+              icon: const Icon(Icons.close_rounded, size: 18),
+              label: Text(loc.cancelJob, style: const TextStyle(fontSize: 13)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.red,
+                side: const BorderSide(color: AppColors.red),
+                minimumSize: const Size.fromHeight(40),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: ActionButton(
               label: loc.startJob,
@@ -1759,6 +1949,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               onPressed: () => _startPendingJob(job, loc),
             ),
           ),
+        ],
         if (canSuccess)
           Expanded(
             child: ActionButton(
@@ -1816,6 +2007,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     required String status,
     required AppLocalizations loc,
   }) async {
+    // The process description holds the job title, so show it only when it adds something
+    final showProcessDescription =
+        processDescription.trim().isNotEmpty &&
+        processDescription.trim() != jobTitle.trim() &&
+        processDescription.trim() != jobDescription.trim();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1856,14 +2052,13 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                 style: const TextStyle(fontSize: 13, color: AppColors.text2),
               ),
               const SizedBox(height: 20),
-              if (processDescription.trim().isNotEmpty)
+              if (showProcessDescription)
                 _buildDescriptionSection(
                   title: loc.processDescription,
                   icon: Icons.account_tree_outlined,
                   description: processDescription,
                 ),
-              if (processDescription.trim().isNotEmpty &&
-                  jobDescription.trim().isNotEmpty)
+              if (showProcessDescription && jobDescription.trim().isNotEmpty)
                 const SizedBox(height: 14),
               if (jobDescription.trim().isNotEmpty)
                 _buildDescriptionSection(
@@ -2052,6 +2247,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
 
     final jobTitle = _resolveJobTitle(
+      jobTitle: job.jobTitle,
       jobDescription: job.jobDescription,
       jobCategory: job.jobCategory,
     );
@@ -2268,7 +2464,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     String? distanceText,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.gray0,
         borderRadius: BorderRadius.circular(10),
@@ -2276,168 +2472,92 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
       ),
       child: Row(
         children: [
-          // Start time
+          // Start time takes the remaining space, the short values keep their own width
           Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.bluePale,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.event_outlined,
-                    color: AppColors.blue,
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        loc.startTime.toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.text3,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        startTime,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.text,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            child: _buildScheduleItem(
+              icon: Icons.event_outlined,
+              iconColor: AppColors.blue,
+              background: AppColors.bluePale,
+              value: startTime,
+              valueColor: AppColors.text,
+              label: loc.startTime,
+              shrinkToFit: true,
             ),
           ),
-          Container(
-            height: 28,
-            width: 1,
-            color: AppColors.gray3,
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-          ),
-          // Duration
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.greenPale,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.timer_outlined,
-                    color: AppColors.green,
-                    size: 18,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        loc.duration.toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.text3,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        durationText,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.green,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(width: 8),
+          _buildScheduleItem(
+            icon: Icons.timer_outlined,
+            iconColor: AppColors.green,
+            background: AppColors.greenPale,
+            value: durationText,
+            valueColor: AppColors.green,
+            label: loc.duration,
           ),
           if (distanceText != null) ...[
-            Container(
-              height: 28,
-              width: 1,
-              color: AppColors.gray3,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-            // Distance
-            Expanded(
-              flex: 2,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: AppColors.orangePale,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.alt_route_outlined,
-                      color: AppColors.orange,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          loc.distanceCaps,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.text3,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          distanceText,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.orange,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            const SizedBox(width: 8),
+            _buildScheduleItem(
+              icon: Icons.near_me_outlined,
+              iconColor: AppColors.orange,
+              background: AppColors.orangePale,
+              value: distanceText,
+              valueColor: AppColors.orange,
+              label: loc.distanceCaps,
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// Icon and value only; the label is kept for the tooltip and screen readers.
+  Widget _buildScheduleItem({
+    required IconData icon,
+    required Color iconColor,
+    required Color background,
+    required String value,
+    required Color valueColor,
+    required String label,
+    bool shrinkToFit = false,
+  }) {
+    final valueText = Text(
+      value,
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        color: valueColor,
+      ),
+      maxLines: 1,
+    );
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        label: '$label: $value',
+        excludeSemantics: true,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 6),
+            // Only an item inside Expanded has a bounded width to shrink into
+            if (shrinkToFit)
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: valueText,
+                ),
+              )
+            else
+              valueText,
+          ],
+        ),
       ),
     );
   }
@@ -2950,9 +3070,13 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   }
 
   String _resolveJobTitle({
+    String jobTitle = '',
     required String jobDescription,
     required String jobCategory,
   }) {
+    final title = jobTitle.trim();
+    if (title.isNotEmpty) return title;
+
     final description = jobDescription.trim();
     if (description.isNotEmpty) return description;
 

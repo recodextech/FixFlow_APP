@@ -5,6 +5,12 @@ export 'job.dart';
 import 'job.dart';
 import 'payment.dart';
 
+/// Maximum characters in a job title, enforced by demand-handler too.
+const int maxJobTitleLength = 50;
+
+/// Maximum characters in a job description, enforced by demand-handler too.
+const int maxJobDescriptionLength = 500;
+
 class ProcessRequest {
   final String name;
   final String description;

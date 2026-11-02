@@ -18,11 +18,12 @@ import 'l10n/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  await NotificationService.initialize();
-  await PreferencesService().init();
+  // Only what the first frame needs blocks startup. Messaging setup waits on
+  // a permission prompt and a token request, so it runs after the app shows.
+  await Future.wait([Firebase.initializeApp(), PreferencesService().init()]);
   runApp(const MyApp());
-  WidgetsBinding.instance.addPostFrameCallback((_) {
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await NotificationService.initialize();
     NotificationService.showPendingMessage();
   });
 }
@@ -60,6 +61,14 @@ class MyApp extends StatelessWidget {
               '/login': (_) => const LoginScreen(),
             },
             debugShowCheckedModeBanner: false,
+            // Dismiss the keyboard when tapping outside a text field. Mobile
+            // platforms don't unfocus on outside taps by default. Taps on
+            // buttons or other fields still win the gesture arena.
+            builder: (context, child) => GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+              child: child,
+            ),
           );
         },
       ),
@@ -68,8 +77,17 @@ class MyApp extends StatelessWidget {
 }
 
 /// Checks auth state, fetches user accounts, and routes accordingly.
-class _AuthGate extends StatelessWidget {
+class _AuthGate extends StatefulWidget {
   const _AuthGate();
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  // Created once: building the future in build() re-ran the whole session
+  // check (token refresh + accounts request) on every rebuild.
+  late final Future<_StartupDestination> _destination = _initSession();
 
   Future<_StartupDestination> _initSession() async {
     final isAuth = await AuthService().validateSessionOnStartup();
@@ -84,7 +102,8 @@ class _AuthGate extends StatelessWidget {
       );
 
       if (accounts.hasAnyProfile) {
-        await NotificationService.registerDeviceForActiveAccount();
+        // Push registration doesn't affect routing, so don't wait for it.
+        NotificationService.registerDeviceForActiveAccount();
         return _StartupDestination.home;
       }
       return _StartupDestination.createUser;
@@ -99,7 +118,7 @@ class _AuthGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<_StartupDestination>(
-      future: _initSession(),
+      future: _destination,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(

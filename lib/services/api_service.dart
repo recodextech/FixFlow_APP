@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/availability.dart';
@@ -39,7 +40,7 @@ class ApiException implements Exception {
 
 class ApiService {
   // All API calls route through KrakenD gateway
-  static const String _gatewayUrl = 'https://noventispvt.xyz';
+  static const String _gatewayUrl = 'https://noventispvt.com';
 
   // Gateway path prefixes for each backend service
   static const String _managementPath = '/api/v1/management';
@@ -54,14 +55,36 @@ class ApiService {
 
   ApiService._internal();
 
-  // Address cache for reverse geocoding
-  final Map<String, String> _addressCache = {};
+  // Recent reverse-geocode lookups, kept as futures so widgets that call
+  // this from build() get the same future back instead of a new request.
+  static const int _maxCachedAddresses = 100;
+  final LinkedHashMap<String, Future<String>> _addressCache = LinkedHashMap();
 
-  Future<String> reverseGeocode(double latitude, double longitude) async {
+  Future<String> reverseGeocode(double latitude, double longitude) {
     final key =
         '${latitude.toStringAsFixed(6)},${longitude.toStringAsFixed(6)}';
-    if (_addressCache.containsKey(key)) return _addressCache[key]!;
 
+    final cached = _addressCache.remove(key);
+    if (cached != null) {
+      // Re-insert to mark as most recently used.
+      _addressCache[key] = cached;
+      return cached;
+    }
+
+    final lookup = _fetchAddress(latitude, longitude).then((address) {
+      if (address != null) return address;
+      // Forget failed lookups so a later call can retry them.
+      _addressCache.remove(key);
+      return '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}';
+    });
+    _addressCache[key] = lookup;
+    if (_addressCache.length > _maxCachedAddresses) {
+      _addressCache.remove(_addressCache.keys.first);
+    }
+    return lookup;
+  }
+
+  Future<String?> _fetchAddress(double latitude, double longitude) async {
     try {
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse'
@@ -73,16 +96,12 @@ class ApiService {
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final display = data['display_name'] as String?;
-        if (display != null) {
-          _addressCache[key] = display;
-          return display;
-        }
+        return data['display_name'] as String?;
       }
     } catch (_) {
       // Fallback to coordinates
     }
-    return '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}';
+    return null;
   }
 
   Future<Map<String, String>> _getHeaders({
@@ -796,6 +815,20 @@ class ApiService {
       jobId: jobId,
       accountId: accountId,
       action: 'success',
+    );
+  }
+
+  /// Cancel an approved job the worker has not started yet.
+  Future<void> cancelWorkerJob({
+    required String workerId,
+    required String jobId,
+    required String accountId,
+  }) async {
+    await _updateWorkerJobStatus(
+      workerId: workerId,
+      jobId: jobId,
+      accountId: accountId,
+      action: 'cancel',
     );
   }
 

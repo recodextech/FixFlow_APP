@@ -4,6 +4,7 @@ class WorkerAssignedJob {
   final String jobId;
   final String jobStatus;
   final String jobCategory;
+  final String jobTitle;
   final String jobDescription;
   final String processDescription;
   final double latitude;
@@ -22,6 +23,7 @@ class WorkerAssignedJob {
     required this.jobId,
     required this.jobStatus,
     this.jobCategory = '',
+    this.jobTitle = '',
     this.jobDescription = '',
     this.processDescription = '',
     required this.latitude,
@@ -53,6 +55,7 @@ class WorkerAssignedJob {
                   json['title'] ??
                   '')
               .toString(),
+      jobTitle: (json['jobTitle'] ?? '').toString(),
       jobDescription: (json['jobDescription'] ?? json['description'] ?? '')
           .toString(),
       processDescription: (json['processDescription'] ?? '').toString(),

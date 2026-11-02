@@ -12,6 +12,8 @@ class PreferencesService {
   String? _userId;
   Worker? _worker;
   Contractor? _contractor;
+  String? _workerPhoto;
+  String? _contractorPhoto;
 
   factory PreferencesService() {
     return _instance;
@@ -21,11 +23,20 @@ class PreferencesService {
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    // Older builds persisted profile photos here; Android loads this whole
+    // file before the first frame, so drop them (they are refetched anyway).
+    if (_prefs.containsKey(_legacyWorkerPhotoKey) ||
+        _prefs.containsKey(_legacyContractorPhotoKey)) {
+      await Future.wait([
+        _prefs.remove(_legacyWorkerPhotoKey),
+        _prefs.remove(_legacyContractorPhotoKey),
+      ]);
+    }
   }
 
   static const String _selectedTypeKey = 'selected_type';
-  static const String _workerPhotoKey = 'worker_photo_base64';
-  static const String _contractorPhotoKey = 'contractor_photo_base64';
+  static const String _legacyWorkerPhotoKey = 'worker_photo_base64';
+  static const String _legacyContractorPhotoKey = 'contractor_photo_base64';
   static const String _deviceIdKey = 'device_id';
   static const String _languageKey = 'app_language';
 
@@ -37,72 +48,40 @@ class PreferencesService {
   }) {
     _userId = userId;
 
-    if (worker != null) {
-      _worker = worker;
-      if (worker.photoBase64 != null && worker.photoBase64!.isNotEmpty) {
-        _prefs.setString(_workerPhotoKey, worker.photoBase64!);
-      } else {
-        _prefs.remove(_workerPhotoKey);
-      }
-    } else {
-      _worker = null;
-      _prefs.remove(_workerPhotoKey);
-    }
-
-    if (contractor != null) {
-      _contractor = contractor;
-      if (contractor.photoBase64 != null &&
-          contractor.photoBase64!.isNotEmpty) {
-        _prefs.setString(_contractorPhotoKey, contractor.photoBase64!);
-      } else {
-        _prefs.remove(_contractorPhotoKey);
-      }
-    } else {
-      _contractor = null;
-      _prefs.remove(_contractorPhotoKey);
-    }
+    _worker = worker;
+    _workerPhoto = _nonEmpty(worker?.photoBase64);
+    _contractor = contractor;
+    _contractorPhoto = _nonEmpty(contractor?.photoBase64);
   }
 
   void setWorkerData(Worker worker) {
-    final mergedPhoto = worker.photoBase64 ?? _prefs.getString(_workerPhotoKey);
-    _worker = worker.copyWith(photoBase64: mergedPhoto);
-    if (mergedPhoto == null || mergedPhoto.isEmpty) {
-      _prefs.remove(_workerPhotoKey);
-    } else {
-      _prefs.setString(_workerPhotoKey, mergedPhoto);
-    }
+    _workerPhoto = _nonEmpty(worker.photoBase64) ?? _workerPhoto;
+    _worker = worker.copyWith(photoBase64: _workerPhoto);
   }
 
   void setContractorData(Contractor contractor) {
-    final mergedPhoto =
-        contractor.photoBase64 ?? _prefs.getString(_contractorPhotoKey);
-    _contractor = contractor.copyWith(photoBase64: mergedPhoto);
-    if (mergedPhoto == null || mergedPhoto.isEmpty) {
-      _prefs.remove(_contractorPhotoKey);
-    } else {
-      _prefs.setString(_contractorPhotoKey, mergedPhoto);
-    }
+    _contractorPhoto = _nonEmpty(contractor.photoBase64) ?? _contractorPhoto;
+    _contractor = contractor.copyWith(photoBase64: _contractorPhoto);
   }
 
-  String? getWorkerPhotoBase64() {
-    return _worker?.photoBase64 ?? _prefs.getString(_workerPhotoKey);
-  }
+  String? getWorkerPhotoBase64() => _workerPhoto;
 
-  String? getContractorPhotoBase64() {
-    return _contractor?.photoBase64 ?? _prefs.getString(_contractorPhotoKey);
-  }
+  String? getContractorPhotoBase64() => _contractorPhoto;
 
   void cacheWorkerPhoto(String base64) {
     if (base64.isEmpty) return;
+    _workerPhoto = base64;
     _worker = _worker?.copyWith(photoBase64: base64);
-    _prefs.setString(_workerPhotoKey, base64);
   }
 
   void cacheContractorPhoto(String base64) {
     if (base64.isEmpty) return;
+    _contractorPhoto = base64;
     _contractor = _contractor?.copyWith(photoBase64: base64);
-    _prefs.setString(_contractorPhotoKey, base64);
   }
+
+  static String? _nonEmpty(String? value) =>
+      value == null || value.isEmpty ? null : value;
 
   String? getUserId() => _userId;
 
@@ -171,9 +150,9 @@ class PreferencesService {
     _userId = null;
     _worker = null;
     _contractor = null;
+    _workerPhoto = null;
+    _contractorPhoto = null;
     await _prefs.remove(_selectedTypeKey);
-    await _prefs.remove(_workerPhotoKey);
-    await _prefs.remove(_contractorPhotoKey);
     await _prefs.remove(_languageKey);
   }
 

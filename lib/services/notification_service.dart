@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -18,6 +20,12 @@ class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static RemoteMessage? _pendingMessage;
   static String? _token;
+  static final StreamController<RemoteMessage> _messageController =
+      StreamController<RemoteMessage>.broadcast();
+
+  /// Messages received while the app is running (foreground or opened from a
+  /// notification), so open screens can refetch the data they describe.
+  static Stream<RemoteMessage> get messages => _messageController.stream;
 
   static Future<void> initialize() async {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -44,8 +52,14 @@ class NotificationService {
       sound: false,
     );
 
-    FirebaseMessaging.onMessage.listen(_showForegroundMessage);
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleOpenedMessage);
+    FirebaseMessaging.onMessage.listen((message) {
+      _messageController.add(message);
+      _showForegroundMessage(message);
+    });
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      _messageController.add(message);
+      _handleOpenedMessage(message);
+    });
     _pendingMessage = await _messaging.getInitialMessage();
   }
 

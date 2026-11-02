@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
@@ -15,6 +14,7 @@ import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
 import '../theme.dart';
 import 'location_picker_screen.dart';
+import '../utils/device_location.dart';
 import '../widgets/app_toast.dart';
 
 class CreateProcessDialog extends StatefulWidget {
@@ -245,6 +245,8 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   }
 
   LatLng _selectedLocation = _defaultLocation;
+  bool _locationPickedByUser = false;
+  bool _hasDeviceLocation = false;
 
   @override
   void initState() {
@@ -255,38 +257,24 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   }
 
   Future<void> _setInitialLocationFromDevice() async {
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+    final location = await getDeviceLocation(onLastKnown: _applyDeviceLocation);
+    if (location != null) _applyDeviceLocation(location);
+    // Otherwise keep the fallback Colombo location.
+  }
 
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-
+  void _applyDeviceLocation(LatLng location) {
+    // Never override a location the user picked manually.
+    if (!mounted || _locationPickedByUser) return;
+    setState(() {
+      _selectedLocation = location;
+      _hasDeviceLocation = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final userLocation = LatLng(position.latitude, position.longitude);
-      setState(() {
-        _selectedLocation = userLocation;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _mapController.move(userLocation, _mapZoom);
-      });
-    } catch (_) {
-      // Keep fallback Colombo location if device location is unavailable.
-    }
+      try {
+        _mapController.move(location, _mapZoom);
+      } catch (_) {}
+    });
   }
 
   Future<void> _loadCashWallet() async {
@@ -371,8 +359,9 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
       );
 
       final processRequest = ProcessRequest(
+        // the job title is the process description, job details stay on the job
         name: _processNameController.text.trim(),
-        description: _processDescriptionController.text.trim(),
+        description: _processNameController.text.trim(),
         jobs: [job],
       );
 
@@ -538,7 +527,7 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
             border: const OutlineInputBorder(),
           ),
           onChanged: (_) => setState(() {}),
-          maxLength: 80,
+          maxLength: maxJobTitleLength,
           validator: (value) => (value == null || value.trim().isEmpty)
               ? loc.pleaseEnterJobTitle
               : null,
@@ -547,12 +536,14 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
         TextFormField(
           controller: _processDescriptionController,
           decoration: InputDecoration(
-            labelText: loc.processDescription,
+            labelText: loc.jobDescription,
             hintText: loc.hintProcessDescription,
             border: const OutlineInputBorder(),
           ),
-          maxLength: 100,
-          maxLines: 2,
+          maxLength: maxJobDescriptionLength,
+          minLines: 3,
+          maxLines: 6,
+          keyboardType: TextInputType.multiline,
           onChanged: (_) => setState(() {}),
           validator: (value) => (value == null || value.trim().isEmpty)
               ? loc.pleaseEnterProcessDescription
@@ -796,11 +787,17 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
       context,
       MaterialPageRoute(
         builder: (_) =>
-            LocationPickerScreen(initialLocation: _selectedLocation),
+            LocationPickerScreen(
+              initialLocation: _selectedLocation,
+              locateOnOpen: !_locationPickedByUser && !_hasDeviceLocation,
+            ),
       ),
     );
     if (result != null) {
-      setState(() => _selectedLocation = result);
+      setState(() {
+        _selectedLocation = result;
+        _locationPickedByUser = true;
+      });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _mapController.move(result, _mapZoom);

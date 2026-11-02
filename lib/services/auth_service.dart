@@ -15,7 +15,7 @@ class AuthService {
 
   // Keycloak configuration — toggle between local and remote
   // static const String _host = 'localhost';           // local dev
-  static const String _host = 'noventispvt.xyz'; // remote server
+  static const String _host = 'noventispvt.com'; // remote server
 
   static const String _issuer =
       'https://$_host/keycloak/realms/noventis-gateway';

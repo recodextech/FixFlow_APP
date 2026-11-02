@@ -9,8 +9,11 @@ import '../providers/language_provider.dart';
 import '../services/preferences_service.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
+import '../utils/live_refresh_mixin.dart';
+import '../widgets/job_history_card.dart';
 import '../widgets/job_images_widget.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/pull_to_refresh.dart';
 import '../widgets/rate_worker_sheet.dart';
 import '../widgets/star_rating.dart';
 import '../l10n/app_localizations.dart';
@@ -30,7 +33,7 @@ class ContractorProfileScreen extends StatefulWidget {
 }
 
 class _ContractorProfileScreenState extends State<ContractorProfileScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, LiveRefreshMixin {
   late TabController _tabController;
   late Future<Contractor?> _contractorFuture;
   late Future<ContractorActiveProcesses> _activeProcessesFuture;
@@ -55,13 +58,53 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
       accountId: accountId,
     );
     _activeProcessesFuture = _loadActiveProcesses();
+    _openCreateJobIfNoJobs(_activeProcessesFuture);
+    startLiveRefresh();
+  }
+
+  /// New contractors with no pending, active or past jobs go straight to the
+  /// create job dialog, like workers without availability.
+  Future<void> _openCreateJobIfNoJobs(
+    Future<ContractorActiveProcesses> activeFuture,
+  ) async {
+    try {
+      final active = await activeFuture;
+      if (!mounted || !active.isEmpty) return;
+      final history = await _loadHistoryProcesses();
+      if (!mounted || history.isNotEmpty) return;
+    } catch (_) {
+      // Never open the dialog when the job lists failed to load.
+      return;
+    }
+    // Wait for the first frame so the dialog opens over the screen.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showCreateProcessDialog();
+    });
   }
 
   @override
   void dispose() {
+    stopLiveRefresh();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  Future<void> onLiveRefresh() async {
+    // Active processes carry the pending job claims that worker claim
+    // notifications announce, so always refetch them.
+    final active = _activeProcessesFuture;
+
+    final newActive = await silentlyLoad(_loadActiveProcesses);
+    if (!mounted) return;
+
+    // Skip any list a user action reloaded while these requests were in flight.
+    setState(() {
+      if (identical(_activeProcessesFuture, active)) {
+        _activeProcessesFuture = newActive;
+      }
+    });
   }
 
   void _onTabChanged() {
@@ -93,6 +136,27 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
       contractorId: widget.contractorId,
       accountId: accountId,
     );
+  }
+
+  // Swipe-down handlers: wait for the data so the refresh spinner stays up,
+  // and keep the current list on screen until the new one arrives.
+  Future<void> _pullActiveProcesses() async {
+    final next = await _pullLoad(_loadActiveProcesses);
+    if (mounted) setState(() => _activeProcessesFuture = next);
+  }
+
+  Future<void> _pullHistoryProcesses() async {
+    final next = await _pullLoad(_loadHistoryProcesses);
+    if (mounted) setState(() => _historyProcessesFuture = next);
+  }
+
+  /// A failed pull shows the tab's error state, like a failed first load.
+  Future<Future<R>> _pullLoad<R>(Future<R> Function() load) async {
+    try {
+      return await silentlyLoad(load);
+    } catch (error, stackTrace) {
+      return Future<R>.error(error, stackTrace);
+    }
   }
 
   AppLocalizations get _loc => AppLocalizations.of(
@@ -489,26 +553,29 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                     activeSnapshot.connectionState == ConnectionState.waiting
                         ? const Center(child: CircularProgressIndicator())
                         : activeSnapshot.hasError
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.warning_amber_rounded,
-                                  size: 48,
-                                  color: AppColors.orange,
-                                ),
-                                const SizedBox(height: 12),
-                                Text(loc.couldNotLoadProcesses),
-                                TextButton.icon(
-                                  onPressed: () => setState(() {
-                                    _activeProcessesFuture =
-                                        _loadActiveProcesses();
-                                  }),
-                                  icon: const Icon(Icons.refresh),
-                                  label: Text(loc.retry),
-                                ),
-                              ],
+                        ? PullToRefresh(
+                            onRefresh: _pullActiveProcesses,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 48,
+                                    color: AppColors.orange,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(loc.couldNotLoadProcesses),
+                                  TextButton.icon(
+                                    onPressed: () => setState(() {
+                                      _activeProcessesFuture =
+                                          _loadActiveProcesses();
+                                    }),
+                                    icon: const Icon(Icons.refresh),
+                                    label: Text(loc.retry),
+                                  ),
+                                ],
+                              ),
                             ),
                           )
                         : _buildOpenProcessesTab(openProcesses, loc),
@@ -516,7 +583,10 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                       future: _historyProcessesFuture,
                       builder: (context, historySnapshot) {
                         if (_historyProcessesFuture == null) {
-                          return Center(child: Text(loc.pressHistoryToLoad));
+                          return PullToRefresh(
+                            onRefresh: _pullHistoryProcesses,
+                            child: Center(child: Text(loc.pressHistoryToLoad)),
+                          );
                         }
                         if (historySnapshot.connectionState ==
                             ConnectionState.waiting) {
@@ -525,26 +595,29 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                           );
                         }
                         if (historySnapshot.hasError) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.warning_amber_rounded,
-                                  size: 48,
-                                  color: AppColors.orange,
-                                ),
-                                const SizedBox(height: 12),
-                                Text(loc.couldNotLoadHistory),
-                                TextButton.icon(
-                                  onPressed: () => setState(() {
-                                    _historyProcessesFuture =
-                                        _loadHistoryProcesses();
-                                  }),
-                                  icon: const Icon(Icons.refresh),
-                                  label: Text(loc.retry),
-                                ),
-                              ],
+                          return PullToRefresh(
+                            onRefresh: _pullHistoryProcesses,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 48,
+                                    color: AppColors.orange,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(loc.couldNotLoadHistory),
+                                  TextButton.icon(
+                                    onPressed: () => setState(() {
+                                      _historyProcessesFuture =
+                                          _loadHistoryProcesses();
+                                    }),
+                                    icon: const Icon(Icons.refresh),
+                                    label: Text(loc.retry),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         }
@@ -693,10 +766,9 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     final hasActiveSection = active.isNotEmpty;
     final offset = hasActiveSection ? 1 : 0;
     return RefreshIndicator(
-      onRefresh: () async => setState(() {
-        _activeProcessesFuture = _loadActiveProcesses();
-      }),
+      onRefresh: _pullActiveProcesses,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: offset + (pending.isEmpty ? 1 : pending.length),
         itemBuilder: (context, index) {
@@ -818,48 +890,48 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     String emptySubtitle, {
     bool isHistory = false,
   }) {
+    final onRefresh = isHistory ? _pullHistoryProcesses : _pullActiveProcesses;
     if (processes.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.inbox_rounded, size: 48, color: AppColors.gray4),
-              const SizedBox(height: 16),
-              Text(
-                emptyTitle,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
+      return PullToRefresh(
+        onRefresh: onRefresh,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.inbox_rounded, size: 48, color: AppColors.gray4),
+                const SizedBox(height: 16),
+                Text(
+                  emptyTitle,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                emptySubtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, color: AppColors.text2),
-              ),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  emptySubtitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, color: AppColors.text2),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
     return RefreshIndicator(
-      onRefresh: () async => setState(() {
-        if (_tabController.index == 0) {
-          _activeProcessesFuture = _loadActiveProcesses();
-        } else {
-          _historyProcessesFuture = _loadHistoryProcesses();
-        }
-      }),
+      onRefresh: onRefresh,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: processes.length,
-        itemBuilder: (context, index) =>
-            _buildProcessCard(processes[index], isHistory: isHistory),
+        itemBuilder: (context, index) => isHistory
+            ? _buildHistoryProcessCard(processes[index], _loc)
+            : _buildProcessCard(processes[index]),
       ),
     );
   }
@@ -872,12 +944,36 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     return '$method · $amount';
   }
 
-  /// [isHistory] trims the card to the essentials: no location, and only the
-  /// worker's avatar with the rating.
-  Widget _buildProcessCard(
-    ContractorProcessSummary process, {
-    bool isHistory = false,
-  }) {
+  /// History shows only the job itself: no worker name, phone, location or
+  /// photos. A completed job keeps its worker rating action.
+  Widget _buildHistoryProcessCard(
+    ContractorProcessSummary process,
+    AppLocalizations loc,
+  ) {
+    final job = process.job;
+    final rawStart = job?.jobStartTime ?? '';
+    final startTime = DateTime.tryParse(
+      rawStart.contains(' ') ? rawStart.replaceFirst(' ', 'T') : rawStart,
+    );
+
+    return JobHistoryCard(
+      title: process.name.isEmpty ? loc.unnamedProcess : process.name,
+      statusChip: ProcessStatusChip(
+        label: loc.statusLabel(process.status),
+        color: getProcessStatusColor(process.status),
+      ),
+      startTime: startTime,
+      rawStartTime: rawStart,
+      durationHours: (job?.durationHours ?? 0).toDouble(),
+      amountLabel: loc.paid,
+      amount: job?.paymentInformation?.amount,
+      footer: process.isWorkerRatable
+          ? _buildWorkerRatingRow(process, loc, inline: true)
+          : null,
+    );
+  }
+
+  Widget _buildProcessCard(ContractorProcessSummary process) {
     final loc = _loc;
     final job = process.job;
     final statusColor = getProcessStatusColor(process.status);
@@ -979,51 +1075,19 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                   _formatPayment(job.paymentInformation!),
                 ),
               ],
-              if (!isHistory) ...[
-                const SizedBox(height: 6),
-                _buildAddressRow(
-                  Icons.location_on_outlined,
-                  loc.location,
-                  job.latitude,
-                  job.longitude,
-                ),
-              ],
+              const SizedBox(height: 6),
+              _buildAddressRow(
+                Icons.location_on_outlined,
+                loc.location,
+                job.latitude,
+                job.longitude,
+              ),
               const SizedBox(height: 8),
               if (job.isAwaitingApproval)
                 _buildPendingClaimSection(job.id, job.claim!, loc)
               else if (job.hasClaim)
                 _buildClosedClaimNote(job.approvalStatus, job.claim!, loc),
-              if (isHistory && job.assignedWorkerId.isNotEmpty) ...[
-                const Divider(height: 12),
-                Row(
-                  children: [
-                    InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => Navigator.pushNamed(
-                        context,
-                        '/worker/${job.assignedWorkerId}',
-                      ),
-                      child: ProfileAvatar(
-                        id: job.assignedWorkerId,
-                        isWorker: true,
-                        radius: 20,
-                      ),
-                    ),
-                    if (process.isWorkerRatable &&
-                        !process.workerRatingCompleted &&
-                        !_ratedJobIds.contains(job.id)) ...[
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _buildWorkerRatingRow(
-                          process,
-                          loc,
-                          inline: true,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ] else if (job.assignedWorkerId.isNotEmpty) ...[
+              if (job.assignedWorkerId.isNotEmpty) ...[
                 const Divider(height: 12),
                 Row(
                   children: [
