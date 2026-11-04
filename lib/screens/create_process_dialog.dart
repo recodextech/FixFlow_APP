@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/process.dart';
 import '../models/worker.dart';
+import '../utils/job_start_picker.dart';
 import '../providers/language_provider.dart';
 import '../services/api_service.dart';
 import '../services/job_photo_upload.dart';
@@ -382,49 +383,14 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
   }
 
   Future<void> _selectStartTime() async {
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
-    final existing = _tryParseJobStart();
-    var initialDate = existing ?? now;
-    if (initialDate.isBefore(todayStart)) {
-      initialDate = todayStart;
-    }
-    final initialTime = existing != null
-        ? TimeOfDay.fromDateTime(existing)
-        : TimeOfDay.now();
-
-    final date = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: todayStart,
-      lastDate: DateTime(now.year + 1, 12, 31),
+    final dateTime = await pickJobStartTime(
+      context,
+      initial: _tryParseJobStart(),
+      onOutOfRange: () => AppToast.warning(_loc.jobStartOutOfRange),
     );
-
-    if (date == null) return;
-    if (!mounted) return;
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: initialTime,
-    );
-
-    if (time == null) return;
-
-    final dateTime = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
-    if (!mounted) return;
+    if (dateTime == null || !mounted) return;
     setState(() {
-      _startTimeController.text =
-          '${dateTime.year.toString().padLeft(4, '0')}-'
-          '${dateTime.month.toString().padLeft(2, '0')}-'
-          '${dateTime.day.toString().padLeft(2, '0')} '
-          '${dateTime.hour.toString().padLeft(2, '0')}:'
-          '${dateTime.minute.toString().padLeft(2, '0')}';
+      _startTimeController.text = formatJobStartRequest(dateTime);
       _clampDurationToJobStart();
     });
   }
@@ -574,6 +540,9 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
             final start = DateTime.tryParse(trimmed);
             if (start == null) {
               return loc.invalidStartDateTime;
+            }
+            if (!isJobStartInRange(start)) {
+              return loc.jobStartOutOfRange;
             }
             if (_maxDurationHoursForJobStart(start) < 1) {
               return loc.startTooLateNotEnoughHours;
@@ -786,11 +755,10 @@ class _CreateProcessDialogState extends State<CreateProcessDialog> {
     final result = await Navigator.push<LatLng>(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            LocationPickerScreen(
-              initialLocation: _selectedLocation,
-              locateOnOpen: !_locationPickedByUser && !_hasDeviceLocation,
-            ),
+        builder: (_) => LocationPickerScreen(
+          initialLocation: _selectedLocation,
+          locateOnOpen: !_locationPickedByUser && !_hasDeviceLocation,
+        ),
       ),
     );
     if (result != null) {

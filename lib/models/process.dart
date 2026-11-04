@@ -99,6 +99,18 @@ class ContractorProcessJobSummary {
   bool get isAwaitingApproval =>
       hasClaim && approvalStatus.toUpperCase() == 'PENDING';
 
+  /// A PENDING job nobody accepted before its start time, expired by the
+  /// nightly run. The contractor can reschedule or delete it.
+  bool get isExpired => status.toUpperCase() == 'EXPIRED';
+
+  /// The contractor can move the job to a new start time: an EXPIRED job, or
+  /// a PENDING one with no worker assigned and no claim awaiting approval.
+  bool get canReschedule {
+    if (isAwaitingApproval || assignedWorkerId.isNotEmpty) return false;
+    final s = status.toUpperCase();
+    return s == 'PENDING' || s == 'EXPIRED';
+  }
+
   ContractorProcessJobSummary({
     required this.id,
     required this.status,

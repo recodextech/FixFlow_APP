@@ -9,7 +9,12 @@ class JobImagesWidget extends StatefulWidget {
   final double height;
   final String? contractorId;
 
-  const JobImagesWidget({super.key, required this.jobId, this.height = 150, this.contractorId});
+  const JobImagesWidget({
+    super.key,
+    required this.jobId,
+    this.height = 150,
+    this.contractorId,
+  });
 
   @override
   State<JobImagesWidget> createState() => _JobImagesWidgetState();
@@ -41,7 +46,10 @@ class _JobImagesWidgetState extends State<JobImagesWidget> {
               jobId: widget.jobId,
               accountId: accountId ?? '',
             )
-          : await ApiService().getJobImages(jobId: widget.jobId, accountId: accountId ?? '');
+          : await ApiService().getJobImages(
+              jobId: widget.jobId,
+              accountId: accountId ?? '',
+            );
       setState(() {
         _images = resp.images;
         _index = 0;

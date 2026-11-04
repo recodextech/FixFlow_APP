@@ -3,11 +3,7 @@ class PaymentInformation {
   final String? method;
   final String? walletId;
 
-  PaymentInformation({
-    required this.amount,
-    this.method,
-    this.walletId,
-  });
+  PaymentInformation({required this.amount, this.method, this.walletId});
 
   factory PaymentInformation.fromJson(Map<String, dynamic> json) {
     return PaymentInformation(

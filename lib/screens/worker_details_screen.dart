@@ -1738,7 +1738,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
             const SizedBox(height: 6),
             _buildAvailabilityInfoRow(
               Icons.date_range,
-              '${_formatDate(availability.startDate)} → ${_formatDate(availability.endDate)}',
+              '${_formatDate(availability.startDate)} → ${availability.endDate == null ? _loc.noEndDate : _formatDate(availability.endDate)}',
             ),
             const SizedBox(height: 6),
             _buildAvailabilityInfoRow(

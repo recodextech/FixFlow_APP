@@ -6,11 +6,7 @@ class UserAccounts {
   final Worker? worker;
   final Contractor? contractor;
 
-  UserAccounts({
-    required this.userId,
-    this.worker,
-    this.contractor,
-  });
+  UserAccounts({required this.userId, this.worker, this.contractor});
 
   factory UserAccounts.fromJson(Map<String, dynamic> json) {
     return UserAccounts(

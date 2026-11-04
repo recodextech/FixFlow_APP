@@ -14,6 +14,7 @@ import '../providers/worker_provider.dart';
 import '../services/preferences_service.dart';
 import 'location_picker_screen.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/wheel_time_picker.dart';
 
 class CreateWorkerAvailabilityScreen extends StatefulWidget {
   final String workerId;
@@ -37,7 +38,9 @@ class _CreateWorkerAvailabilityScreenState
   String _selectedAddress = 'Colombo, Sri Lanka';
   bool _isLoadingAddress = false;
   DateTime? _startDate;
-  DateTime? _endDate;
+
+  /// Months the availability runs from the start date; null means no end date.
+  int? _durationMonths;
   String _frequency = 'weekly';
   bool _isSubmitting = false;
   final List<_TimeWindowDraft> _timeWindows = [_TimeWindowDraft(duration: 1)];
@@ -141,27 +144,28 @@ class _CreateWorkerAvailabilityScreenState
 
     setState(() {
       _startDate = selected;
-      if (_endDate != null && _endDate!.isBefore(_startDate!)) {
-        _endDate = _startDate;
-      }
     });
   }
 
-  Future<void> _pickEndDate() async {
-    final initialDate = _endDate ?? _startDate ?? DateTime.now();
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate:
-          _startDate ?? DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 3650)),
-    );
+  static const List<int?> _durationOptions = [null, 1, 3, 6, 12];
 
-    if (selected == null) return;
+  /// The last day covered by [_durationMonths] from [start], e.g. 3 months from 15 Jan ends 14 Apr.
+  DateTime? _endDateFor(DateTime start) {
+    final months = _durationMonths;
+    if (months == null) return null;
+    return DateTime(
+      start.year,
+      start.month + months,
+      start.day,
+    ).subtract(const Duration(days: 1));
+  }
 
-    setState(() {
-      _endDate = selected;
-    });
+  String? _durationHint(AppLocalizations loc) {
+    final start = _startDate;
+    if (start == null) return null;
+    final end = _endDateFor(start);
+    if (end == null) return null;
+    return loc.endsOn(_dateFormat.format(end));
   }
 
   /// Whole hours from [start] until midnight (end of that calendar day), capped at 12.
@@ -188,9 +192,11 @@ class _CreateWorkerAvailabilityScreenState
   Future<void> _pickTimeWindowStart(int index) async {
     final current =
         _timeWindows[index].startTime ?? const TimeOfDay(hour: 9, minute: 0);
-    final selectedTime = await showTimePicker(
-      context: context,
-      initialTime: current,
+    // A window needs at least one full hour before midnight.
+    final selectedTime = await showWheelTimePicker(
+      context,
+      initial: current,
+      latest: const TimeOfDay(hour: 23, minute: 0),
     );
 
     if (selectedTime == null) return;
@@ -216,8 +222,7 @@ class _CreateWorkerAvailabilityScreenState
 
   bool get _canCreateAvailability {
     if (_isSubmitting) return false;
-    if (_startDate == null || _endDate == null) return false;
-    if (_endDate!.isBefore(_startDate!)) return false;
+    if (_startDate == null) return false;
     if (_frequency.isEmpty) return false;
 
     for (final window in _timeWindows) {
@@ -235,14 +240,6 @@ class _CreateWorkerAvailabilityScreenState
   String? _validateForm(AppLocalizations loc) {
     if (_startDate == null) {
       return loc.pleaseSelectStartDate;
-    }
-
-    if (_endDate == null) {
-      return loc.pleaseSelectEndDate;
-    }
-
-    if (_endDate!.isBefore(_startDate!)) {
-      return loc.endDateMustBeAfterStart;
     }
 
     for (var index = 0; index < _timeWindows.length; index++) {
@@ -294,7 +291,7 @@ class _CreateWorkerAvailabilityScreenState
         longitude: _selectedLocation.longitude,
       ),
       startDate: _startDate!,
-      endDate: _endDate!,
+      endDate: _endDateFor(_startDate!),
       frequency: _frequency,
       timeWindow: _timeWindows
           .map(
@@ -476,33 +473,50 @@ class _CreateWorkerAvailabilityScreenState
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickStartDate,
-                        icon: const Icon(Icons.calendar_today),
-                        label: Text(
-                          _startDate == null
-                              ? loc.startDate
-                              : _dateFormat.format(_startDate!),
-                        ),
-                      ),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _pickStartDate,
+                    icon: const Icon(Icons.calendar_today),
+                    label: Text(
+                      _startDate == null
+                          ? loc.startDate
+                          : _dateFormat.format(_startDate!),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickEndDate,
-                        icon: const Icon(Icons.event),
-                        label: Text(
-                          _endDate == null
-                              ? loc.endDate
-                              : _dateFormat.format(_endDate!),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  loc.availabilityDuration,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _durationOptions.map((months) {
+                    return ChoiceChip(
+                      label: Text(
+                        months == null
+                            ? loc.noEndDate
+                            : loc.monthsCount(months),
+                      ),
+                      selected: _durationMonths == months,
+                      onSelected: (_) =>
+                          setState(() => _durationMonths = months),
+                    );
+                  }).toList(),
+                ),
+                if (_durationHint(loc) case final hint?) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    hint,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   initialValue: _frequency,

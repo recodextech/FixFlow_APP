@@ -9,6 +9,7 @@ import '../providers/language_provider.dart';
 import '../services/preferences_service.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
+import '../utils/job_start_picker.dart';
 import '../utils/live_refresh_mixin.dart';
 import '../widgets/job_history_card.dart';
 import '../widgets/job_images_widget.dart';
@@ -41,6 +42,7 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   int _lastFetchedTabIndex = 0;
   bool _isActiveProcessesExpanded = false;
   final Set<String> _claimActionInProgress = {};
+  final Set<String> _rescheduleInProgress = {};
   final Map<String, Future<Worker?>> _claimWorkerFutures = {};
 
   /// Jobs rated in this session, so the card switches to "rated" before the
@@ -337,6 +339,59 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     }
   }
 
+  /// Picks a new start time for a PENDING or EXPIRED job, then reschedules
+  /// it; the job becomes PENDING again.
+  Future<void> _rescheduleJob(ContractorProcessJobSummary job) async {
+    final accountId = PreferencesService().getAccountId();
+    if (accountId == null) {
+      AppToast.error(_loc.accountIdMissing);
+      return;
+    }
+
+    final current = DateTime.tryParse(job.jobStartTime.replaceFirst(' ', 'T'));
+    final startTime = await pickJobStartTime(
+      context,
+      initial: current,
+      onOutOfRange: () => AppToast.warning(_loc.jobStartOutOfRange),
+    );
+    if (startTime == null || !mounted) return;
+
+    // The job must end by midnight of its start day.
+    final endOfDay = DateTime(
+      startTime.year,
+      startTime.month,
+      startTime.day,
+    ).add(const Duration(days: 1));
+    if (startTime.add(Duration(hours: job.durationHours)).isAfter(endOfDay)) {
+      AppToast.warning(_loc.rescheduleEndsAfterMidnight);
+      return;
+    }
+
+    setState(() => _rescheduleInProgress.add(job.id));
+
+    try {
+      await ApiService().rescheduleJob(
+        contractorId: widget.contractorId,
+        jobId: job.id,
+        accountId: accountId,
+        startTime: startTime,
+      );
+      if (!mounted) return;
+      AppToast.success(_loc.jobRescheduled);
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.fromError(e, loc: _loc, fallback: _loc.failedToRescheduleJob);
+    } finally {
+      // Reload either way: on a conflict the job changed state elsewhere.
+      if (mounted) {
+        setState(() {
+          _rescheduleInProgress.remove(job.id);
+          _activeProcessesFuture = _loadActiveProcesses();
+        });
+      }
+    }
+  }
+
   Future<void> _openRateWorkerSheet(
     ContractorProcessSummary process,
     int initialRating,
@@ -397,6 +452,8 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
     // Process can be deleted only if it's not assigned or accepted.
     // "Not assigned" means assignedWorkerId is empty.
     // "Not accepted" generally means status is CREATED or PENDING.
+    // An EXPIRED job (nobody accepted it) can always be deleted.
+    if (process.job?.isExpired == true) return true;
     final status = process.status.toUpperCase();
     final isPendingOrCreated = status == 'PENDING' || status == 'CREATED';
     final isNotAssigned = (process.job?.assignedWorkerId ?? '').isEmpty;
@@ -976,7 +1033,11 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
   Widget _buildProcessCard(ContractorProcessSummary process) {
     final loc = _loc;
     final job = process.job;
-    final statusColor = getProcessStatusColor(process.status);
+    final chipStatus = job?.isAwaitingApproval == true
+        ? 'AWAITING_APPROVAL'
+        : job?.isExpired == true
+        ? 'EXPIRED'
+        : process.status;
 
     return Card(
       elevation: 0,
@@ -1023,6 +1084,23 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                     ],
                   ),
                 ),
+                if (job != null && job.canReschedule && !job.isExpired)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.edit_calendar,
+                        color: AppColors.blue,
+                        size: 20,
+                      ),
+                      tooltip: loc.rescheduleJob,
+                      onPressed: _rescheduleInProgress.contains(job.id)
+                          ? null
+                          : () => _rescheduleJob(job),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ),
                 if (_canDeleteProcess(process))
                   IconButton(
                     icon: const Icon(
@@ -1036,14 +1114,8 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                   ),
                 const SizedBox(width: 8),
                 ProcessStatusChip(
-                  label: loc.statusLabel(
-                    job?.isAwaitingApproval == true
-                        ? 'AWAITING_APPROVAL'
-                        : process.status,
-                  ),
-                  color: job?.isAwaitingApproval == true
-                      ? getProcessStatusColor('AWAITING_APPROVAL')
-                      : statusColor,
+                  label: loc.statusLabel(chipStatus),
+                  color: getProcessStatusColor(chipStatus),
                 ),
               ],
             ),
@@ -1083,7 +1155,15 @@ class _ContractorProfileScreenState extends State<ContractorProfileScreen>
                 job.longitude,
               ),
               const SizedBox(height: 8),
-              if (job.isAwaitingApproval)
+              if (job.isExpired)
+                ExpiredJobBanner(
+                  title: loc.jobExpiredNoWorker,
+                  hint: loc.jobExpiredRescheduleHint,
+                  buttonLabel: loc.reschedule,
+                  isBusy: _rescheduleInProgress.contains(job.id),
+                  onReschedule: () => _rescheduleJob(job),
+                )
+              else if (job.isAwaitingApproval)
                 _buildPendingClaimSection(job.id, job.claim!, loc)
               else if (job.hasClaim)
                 _buildClosedClaimNote(job.approvalStatus, job.claim!, loc),

@@ -10,6 +10,7 @@ import '../models/process.dart';
 import '../models/worker_assigned_job.dart';
 import '../models/worker_job_suggestion.dart';
 import '../models/job_images.dart';
+import '../utils/job_start_picker.dart';
 import 'auth_service.dart';
 import 'preferences_service.dart';
 
@@ -913,6 +914,33 @@ class ApiService {
     }
   }
 
+  /// Move a PENDING or EXPIRED job to a new start time (account local time).
+  /// The job becomes PENDING again. Fails with a conflict (409) when the job
+  /// changed state or a claim awaits approval.
+  Future<void> rescheduleJob({
+    required String contractorId,
+    required String jobId,
+    required String accountId,
+    required DateTime startTime,
+  }) async {
+    final response = await _sendWithAuthRetry(
+      method: 'PATCH',
+      uri: Uri.parse(
+        '$_gatewayUrl$_managementPath/contractor/$contractorId/job/$jobId/reschedule',
+      ),
+      accountId: accountId,
+      traceId: _buildTraceId(),
+      body: jsonEncode({'startTime': formatJobStartRequest(startTime)}),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw _buildApiException(
+        fallbackMessage: 'Failed to reschedule job',
+        response: response,
+      );
+    }
+  }
+
   /// Create a user account with both worker and contractor profiles.
   Future<UserAccounts> createUserAccount({
     required String name,
@@ -1209,6 +1237,7 @@ class ApiService {
       rethrow;
     }
   }
+
   /// Ledger entries of one of the account's wallets, newest first.
   Future<List<WalletTransaction>> getWalletTransactions({
     required String walletId,
@@ -1216,7 +1245,9 @@ class ApiService {
   }) async {
     final response = await _sendWithAuthRetry(
       method: 'GET',
-      uri: Uri.parse('$_gatewayUrl$_paymentPath/wallets/$walletId/transactions'),
+      uri: Uri.parse(
+        '$_gatewayUrl$_paymentPath/wallets/$walletId/transactions',
+      ),
       accountId: accountId,
     );
 
@@ -1241,7 +1272,6 @@ class ApiService {
         .map((json) => WalletTransaction.fromJson(json as Map<String, dynamic>))
         .toList();
   }
-
 
   /// Get active processes for a contractor
   Future<ContractorActiveProcesses> getActiveContractorProcesses({

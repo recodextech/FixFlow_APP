@@ -4,16 +4,10 @@ class AvailabilityLocation {
   final double latitude;
   final double longitude;
 
-  AvailabilityLocation({
-    required this.latitude,
-    required this.longitude,
-  });
+  AvailabilityLocation({required this.latitude, required this.longitude});
 
   Map<String, dynamic> toJson() {
-    return {
-      'latitude': latitude,
-      'longitude': longitude,
-    };
+    return {'latitude': latitude, 'longitude': longitude};
   }
 }
 
@@ -21,10 +15,7 @@ class AvailabilityTimeWindow {
   final DateTime startTime;
   final int duration;
 
-  AvailabilityTimeWindow({
-    required this.startTime,
-    required this.duration,
-  });
+  AvailabilityTimeWindow({required this.startTime, required this.duration});
 
   Map<String, dynamic> toJson() {
     return {
@@ -37,14 +28,16 @@ class AvailabilityTimeWindow {
 class WorkerAvailabilityRequest {
   final AvailabilityLocation location;
   final DateTime startDate;
-  final DateTime endDate;
+
+  /// Null for an availability with no end date; it keeps running.
+  final DateTime? endDate;
   final String frequency;
   final List<AvailabilityTimeWindow> timeWindow;
 
   WorkerAvailabilityRequest({
     required this.location,
     required this.startDate,
-    required this.endDate,
+    this.endDate,
     required this.frequency,
     required this.timeWindow,
   });
@@ -53,7 +46,7 @@ class WorkerAvailabilityRequest {
     return {
       'location': location.toJson(),
       'startDate': DateFormat('yyyy-MM-dd').format(startDate),
-      'endDate': DateFormat('yyyy-MM-dd').format(endDate),
+      if (endDate != null) 'endDate': DateFormat('yyyy-MM-dd').format(endDate!),
       'frequency': frequency,
       'timeWindow': timeWindow.map((window) => window.toJson()).toList(),
     };
@@ -85,6 +78,8 @@ class WorkerAvailability {
   final double latitude;
   final double longitude;
   final DateTime? startDate;
+
+  /// Null when the availability has no end date.
   final DateTime? endDate;
   final String status;
   final String frequency;
@@ -103,18 +98,22 @@ class WorkerAvailability {
 
   factory WorkerAvailability.fromJson(Map<String, dynamic> json) {
     return WorkerAvailability(
-      id: json['id']?.toString() ??
+      id:
+          json['id']?.toString() ??
           json['availabilityId']?.toString() ??
           json['availability_id']?.toString() ??
           '',
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       startDate: _parseDate(json['startDate']?.toString()),
-      endDate: _parseDate(json['endDate']?.toString()),
+      endDate: _parseEndDate(json['endDate']?.toString()),
       status: json['status']?.toString() ?? '',
       frequency: json['frequency']?.toString() ?? '',
       windows: (json['windows'] as List<dynamic>? ?? [])
-          .map((item) => WorkerAvailabilityWindow.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) =>
+                WorkerAvailabilityWindow.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
     );
   }
@@ -131,7 +130,9 @@ class WorkerAvailabilityResponse {
 
   factory WorkerAvailabilityResponse.fromJson(Map<String, dynamic> json) {
     final availabilities = (json['availabilities'] as List<dynamic>? ?? [])
-        .map((item) => WorkerAvailability.fromJson(item as Map<String, dynamic>))
+        .map(
+          (item) => WorkerAvailability.fromJson(item as Map<String, dynamic>),
+        )
         .toList();
 
     return WorkerAvailabilityResponse(
@@ -170,4 +171,11 @@ DateTime? _parseDateTime(String? value) {
   } catch (_) {
     return null;
   }
+}
+
+/// The backend stores 9999-12-31 for an availability without an end date.
+DateTime? _parseEndDate(String? value) {
+  final date = _parseDate(value);
+  if (date == null || date.year >= 9999) return null;
+  return date;
 }

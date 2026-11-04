@@ -55,6 +55,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
   bool _hasPromptedAvailabilityCreation = false;
   bool _isAvailabilityScreenOpen = false;
   bool _isAwaitingApprovalExpanded = false;
+  bool _isAvailabilityExpanded = false;
   List<WorkerAvailability> _availabilities = [];
   final Map<String, Contractor?> _contractorCache = {};
   final Set<String> _loadingContractorIds = {};
@@ -315,10 +316,11 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                                   avail.startDate ??
                                                       DateTime.now(),
                                                 ),
-                                                DateFormat('MMM d').format(
-                                                  avail.endDate ??
-                                                      DateTime.now(),
-                                                ),
+                                                avail.endDate == null
+                                                    ? loc.noEndDate
+                                                    : DateFormat(
+                                                        'MMM d',
+                                                      ).format(avail.endDate!),
                                               ),
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.w600,
@@ -1273,126 +1275,57 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               // Profile info
               Row(
                 children: [
-                  Column(
-                    children: [
-                      ProfileAvatar(id: worker.id, isWorker: true, radius: 35),
-                      const SizedBox(height: 6),
-                      _buildWorkerRatingIndicator(loc),
-                    ],
-                  ),
-                  const SizedBox(width: 16),
+                  ProfileAvatar(id: worker.id, isWorker: true, radius: 32),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           worker.workerName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            StatusBadge(status: status),
-                            const SizedBox(width: 12),
-                            if (worker.categories.isNotEmpty)
-                              Flexible(
-                                child: Wrap(
-                                  spacing: 6,
-                                  runSpacing: 4,
-                                  children: [
-                                    ...worker.categories.take(2).map((
-                                      category,
-                                    ) {
-                                      return Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.2,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            14,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.3,
-                                            ),
-                                            width: 1,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          category,
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                    if (worker.categories.length > 2)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.15,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            14,
-                                          ),
-                                          border: Border.all(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.25,
-                                            ),
-                                            width: 1,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '+${worker.categories.length - 2}',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
+                            _buildWorkerRatingIndicator(),
+                            if (loc.statusLabel(status).isNotEmpty)
+                              StatusBadge(status: status),
                           ],
                         ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: _openWorkerDetails,
-                    icon: const Icon(Icons.edit_outlined),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                  if (worker.categories.isNotEmpty) ...[
+                    _buildHeaderIconButton(
+                      icon: Icons.handyman_outlined,
+                      tooltip: loc.skills,
+                      onPressed: () => _showWorkerCategories(worker, loc),
                     ),
+                    const SizedBox(width: 8),
+                  ],
+                  _buildHeaderIconButton(
+                    icon: Icons.edit_outlined,
                     tooltip: loc.editProfile,
+                    onPressed: _openWorkerDetails,
                   ),
                 ],
               ),
               const SizedBox(height: 20),
 
-              // Availability Card
+              // Availability Card (collapsed by default; tap the header to expand)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
@@ -1406,35 +1339,36 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                 ),
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: hasAvailability
-                                ? AppColors.greenPale
-                                : AppColors.orangePale,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            hasAvailability
-                                ? Icons.event_available
-                                : Icons.event_busy,
-                            color: hasAvailability
-                                ? AppColors.green
-                                : AppColors.orange,
-                            size: 20,
-                          ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => setState(
+                        () =>
+                            _isAvailabilityExpanded = !_isAvailabilityExpanded,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
+                        child: Row(
+                          children: [
+                            Icon(
+                              hasAvailability
+                                  ? Icons.event_available
+                                  : Icons.event_busy,
+                              color: hasAvailability
+                                  ? AppColors.green
+                                  : AppColors.orange,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
                                 hasAvailability
                                     ? loc.availabilityActive
                                     : loc.noAvailabilitySet,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
@@ -1443,63 +1377,113 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
                                       : AppColors.orange,
                                 ),
                               ),
+                            ),
+                            if (hasAvailability)
                               Text(
-                                hasAvailability
-                                    ? '$totalWindows / 3 ${loc.windowsConfigured}'
-                                    : loc.addSlotsDescription,
+                                '$totalWindows / 3',
                                 style: const TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 13,
                                   color: AppColors.text2,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                        if (hasAvailability)
-                          TextButton(
-                            onPressed: () => _manageAvailability(loc),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.green,
-                              backgroundColor: AppColors.greenPale,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                            AnimatedRotation(
+                              turns: _isAvailabilityExpanded ? 0.5 : 0,
+                              duration: const Duration(milliseconds: 200),
+                              child: const Icon(
+                                Icons.expand_more,
+                                color: AppColors.text2,
                               ),
                             ),
-                            child: Text(
-                              loc.manage,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (!hasAvailability || canAddMore) ...[
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 44,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _openAddAvailability(loc),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: Text(loc.addAvailability),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.green,
-                            side: const BorderSide(
-                              color: AppColors.green,
-                              width: 1.5,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
+                    AnimatedCrossFade(
+                      duration: const Duration(milliseconds: 200),
+                      crossFadeState: _isAvailabilityExpanded
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      firstChild: const SizedBox(width: double.infinity),
+                      secondChild: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              hasAvailability
+                                  ? '$totalWindows / 3 ${loc.windowsConfigured}'
+                                  : loc.addSlotsDescription,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.text2,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                if (hasAvailability)
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 44,
+                                      child: TextButton(
+                                        onPressed: () =>
+                                            _manageAvailability(loc),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: AppColors.green,
+                                          backgroundColor: AppColors.greenPale,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          loc.manage,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (hasAvailability && canAddMore)
+                                  const SizedBox(width: 10),
+                                if (!hasAvailability || canAddMore)
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 44,
+                                      child: OutlinedButton.icon(
+                                        onPressed: () =>
+                                            _openAddAvailability(loc),
+                                        icon: const Icon(Icons.add, size: 18),
+                                        label: Text(
+                                          loc.addAvailability,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppColors.green,
+                                          side: const BorderSide(
+                                            color: AppColors.green,
+                                            width: 1.5,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1620,8 +1604,9 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
     );
   }
 
-  /// Compact rating pill under the avatar: ★ 4.3 (12), or "No ratings yet".
-  Widget _buildWorkerRatingIndicator(AppLocalizations loc) {
+  /// Compact rating pill next to the name: ★ 4.3 (12). The backend sends 5 for a worker with no
+  /// ratings yet, so an unrated worker shows ★ 5.0.
+  Widget _buildWorkerRatingIndicator() {
     return FutureBuilder<WorkerRating?>(
       future: _workerRatingFuture,
       builder: (context, snapshot) {
@@ -1643,7 +1628,7 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
               Text(
                 rating.hasRatings
                     ? '${rating.rating.toStringAsFixed(1)} (${rating.ratingCount})'
-                    : loc.noRatingsYet,
+                    : rating.rating.toStringAsFixed(1),
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -1654,6 +1639,62 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildHeaderIconButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon),
+      tooltip: tooltip,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.2),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void _showWorkerCategories(Worker worker, AppLocalizations loc) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.handyman_outlined, color: AppColors.green),
+            const SizedBox(width: 8),
+            Text(loc.skills),
+          ],
+        ),
+        content: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: worker.categories
+              .map(
+                (category) => Chip(
+                  label: Text(category),
+                  backgroundColor: AppColors.greenPale,
+                  side: BorderSide.none,
+                  labelStyle: const TextStyle(
+                    color: AppColors.green,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(loc.close),
+          ),
+        ],
+      ),
     );
   }
 

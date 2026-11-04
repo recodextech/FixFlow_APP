@@ -18,6 +18,9 @@ class AppColors {
   static const orange = Color(0xFFE65100);
   static const orangePale = Color(0xFFFFF3E0);
 
+  static const warning = Color(0xFFB26A00);
+  static const warningPale = Color(0xFFFFF8E1);
+
   static const red = Color(0xFFC62828);
   static const redPale = Color(0xFFFFEBEE);
 

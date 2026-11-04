@@ -34,7 +34,8 @@ class Job {
       paymentInformation: PaymentInformation.fromJson(
         json['paymentInformation'] ?? {},
       ),
-      photos: (json['photos'] as List<dynamic>?)
+      photos:
+          (json['photos'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           [],

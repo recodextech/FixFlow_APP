@@ -3,8 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fixflow_app/widgets/job_history_card.dart';
 
-Widget _wrap(Widget child) =>
-    MaterialApp(home: Scaffold(body: SizedBox(width: 360, child: child)));
+Widget _wrap(Widget child) => MaterialApp(
+  home: Scaffold(body: SizedBox(width: 360, child: child)),
+);
 
 void main() {
   testWidgets('shows job, date, time, duration and amount', (tester) async {

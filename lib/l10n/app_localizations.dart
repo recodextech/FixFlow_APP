@@ -912,14 +912,72 @@ class AppLocalizations {
     return 'Please select a start date';
   }
 
-  String get pleaseSelectEndDate {
-    if (isSinhala) return 'කරුණාකර අවසන් දිනය තෝරන්න';
-    return 'Please select an end date';
+  String get jobStartOutOfRange {
+    if (isSinhala) {
+      return 'රැකියාව පැයකට පසු සිට මාස 3ක් ඇතුළත ආරම්භ විය යුතුය';
+    }
+    return 'Job must start at least 1 hour from now and within 3 months';
   }
 
-  String get endDateMustBeAfterStart {
-    if (isSinhala) return 'අවසන් දිනය ආරම්භක දිනයට සමඟ හෝ පසුව විය යුතුය';
-    return 'End date must be on or after start date';
+  // RESCHEDULE JOB
+
+  String get jobExpiredNoWorker {
+    if (isSinhala) return 'කල් ඉකුත් විය – කිසිදු සේවකයෙක් පිළිගත්තේ නැත';
+    return 'Expired – no worker accepted';
+  }
+
+  String get jobExpiredRescheduleHint {
+    if (isSinhala) {
+      return 'නව ආරම්භක වේලාවක් තෝරා රැකියාව නැවත සේවකයින්ට පෙන්වන්න.';
+    }
+    return 'Pick a new start time to show this job to workers again.';
+  }
+
+  String get reschedule {
+    if (isSinhala) return 'නැවත කාලසටහන් කරන්න';
+    return 'Reschedule';
+  }
+
+  String get rescheduleJob {
+    if (isSinhala) return 'රැකියාව නැවත කාලසටහන් කරන්න';
+    return 'Reschedule job';
+  }
+
+  String get jobRescheduled {
+    if (isSinhala) return 'රැකියාව නැවත කාලසටහන් කරන ලදී';
+    return 'Job rescheduled';
+  }
+
+  String get failedToRescheduleJob {
+    if (isSinhala) return 'රැකියාව නැවත කාලසටහන් කිරීම අසාර්ථක විය';
+    return 'Failed to reschedule job';
+  }
+
+  String get rescheduleEndsAfterMidnight {
+    if (isSinhala) {
+      return 'මෙම ආරම්භක වේලාවෙන් රැකියාව මධ්‍යම රාත්‍රියට පෙර අවසන් නොවේ';
+    }
+    return 'The job would run past midnight from this start time';
+  }
+
+  String get availabilityDuration {
+    if (isSinhala) return 'කාලසීමාව';
+    return 'Duration';
+  }
+
+  String get noEndDate {
+    if (isSinhala) return 'අවසන් දිනයක් නැත';
+    return 'No end date';
+  }
+
+  String monthsCount(int months) {
+    if (isSinhala) return 'මාස $months';
+    return months == 1 ? '1 month' : '$months months';
+  }
+
+  String endsOn(String date) {
+    if (isSinhala) return '$date දින අවසන් වේ';
+    return 'Ends on $date';
   }
 
   String get pleaseSelectStartTimeForWindow {
@@ -1728,6 +1786,8 @@ class AppLocalizations {
         return isSinhala ? 'පිළිගත්' : 'ACCEPTED';
       case 'AWAITING_APPROVAL':
         return isSinhala ? 'අනුමැතිය බලාපොරොත්තුවෙන්' : 'AWAITING APPROVAL';
+      case 'EXPIRED':
+        return isSinhala ? 'කල් ඉකුත් විය' : 'EXPIRED';
       case 'STARTED':
         return isSinhala ? 'ආරම්භ කළ' : 'STARTED';
       case 'IN_PROGRESS':

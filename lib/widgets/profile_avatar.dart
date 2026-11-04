@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../models/job_images.dart';
 import '../services/api_service.dart';
@@ -10,7 +9,12 @@ class ProfileAvatar extends StatefulWidget {
   final bool isWorker;
   final double radius;
 
-  const ProfileAvatar({super.key, required this.id, this.isWorker = true, this.radius = 20});
+  const ProfileAvatar({
+    super.key,
+    required this.id,
+    this.isWorker = true,
+    this.radius = 20,
+  });
 
   @override
   State<ProfileAvatar> createState() => _ProfileAvatarState();
@@ -30,8 +34,12 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
     // Only use locally saved profile photo when it belongs to the requested id.
     final prefs = PreferencesService();
     final prefsPhoto = widget.isWorker
-        ? (prefs.getWorkerId() == widget.id ? prefs.getWorkerPhotoBase64() : null)
-        : (prefs.getContractorId() == widget.id ? prefs.getContractorPhotoBase64() : null);
+        ? (prefs.getWorkerId() == widget.id
+              ? prefs.getWorkerPhotoBase64()
+              : null)
+        : (prefs.getContractorId() == widget.id
+              ? prefs.getContractorPhotoBase64()
+              : null);
 
     if (prefsPhoto != null && prefsPhoto.isNotEmpty) {
       if (!mounted) return;
@@ -45,8 +53,14 @@ class _ProfileAvatarState extends State<ProfileAvatar> {
     try {
       final accountId = prefs.getAccountId();
       final item = widget.isWorker
-          ? await ApiService().getWorkerProfilePicture(workerId: widget.id, accountId: accountId)
-          : await ApiService().getContractorProfilePicture(contractorId: widget.id, accountId: accountId);
+          ? await ApiService().getWorkerProfilePicture(
+              workerId: widget.id,
+              accountId: accountId,
+            )
+          : await ApiService().getContractorProfilePicture(
+              contractorId: widget.id,
+              accountId: accountId,
+            );
       if (!mounted) return;
       setState(() {
         _item = item;
